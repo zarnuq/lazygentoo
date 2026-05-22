@@ -1,0 +1,12 @@
+#!/bin/sh
+exec 2>&1
+# Use the absolute path so this doesn't depend on $SVDIR — runsv inherits
+# sv's compile-time default, which on Gentoo's runit isn't /etc/service.
+# If dbus isn't up yet, exit 1 and let runsv retry — that's how runit
+# expresses a dependency.
+sv check /etc/service/dbus >/dev/null 2>&1 || exit 1
+# NM only has --debug for stderr logging (implies -n). With plain -n,
+# logs go to syslog (sysklogd handles them → /var/log/messages). To
+# pipe NM logs through runsv's log instead, configure
+# /etc/NetworkManager/NetworkManager.conf [logging] section.
+exec NetworkManager -n

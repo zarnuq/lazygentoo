@@ -1,0 +1,98 @@
+---
+###############
+# install nix #
+###############
+- name: check if nix is already installed
+  stat:
+    path: /nix/var/nix/profiles/default/bin/nix-daemon
+  register: nix_check
+
+- name: download nix installer
+  get_url:
+    url: https://nixos.org/nix/install
+    dest: /tmp/nix-install.sh
+    mode: "0755"
+  when: not nix_check.stat.exists
+
+- name: Run Nix installer (multi-user / --daemon)
+  command: /tmp/nix-install.sh --daemon --yes
+  args:
+    creates: /nix/var/nix/profiles/default/bin/nix-daemon
+  when: not nix_check.stat.exists
+
+- name: configure /etc/nix/nix.conf
+  blockinfile:
+    path: /etc/nix/nix.conf
+    create: yes
+    mode: "0644"
+    marker: "# {mark} ANSIBLE-MANAGED nix settings"
+    block: |
+      experimental-features = nix-command flakes
+      trusted-users = root {{ user_name }}
+      sandbox = true
+      auto-optimise-store = true
+
+#####################
+# nix runit service #
+#####################
+- name: enable nix-daemon
+  file:
+    src: /etc/sv/nix-daemon
+    dest: /etc/service/nix-daemon
+    state: link
+    force: yes
+
+- name: start nix-daemon
+  shell: |
+    [ "$(cat /proc/1/comm)" = "runit" ] && sv up nix-daemon || \
+    echo "not running runit as PID 1; nix-daemon will start on next runit boot"
+
+- name: source nix profile
+  lineinfile:
+    path: /etc/zsh/zshenv
+    regexp: '\. .*/nix-daemon\.sh$'
+    line: '[ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+    create: yes
+    mode: "0644"
+
+#######################
+# home-manger install #
+#######################
+- name: add nixpkgs channel
+  shell: |
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    nix-channel --add https://nixos.org/channels/{{ nix_channel }} nixpkgs
+  args:
+    creates: "/home/{{ user_name }}/.nix-defexpr/channels/nixpkgs"
+  become_user: "{{ user_name }}"
+
+- name: add home-manager channel
+  shell: |
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    nix-channel --add https://github.com/nix-community/home-manager/archive/{{ home_manager_branch }}.tar.gz home-manager
+  args:
+    creates: "/home/{{ user_name }}/.nix-defexpr/channels/home-manager"
+  become_user: "{{ user_name }}"
+
+- name: update nix channels
+  shell: |
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    nix-channel --update
+  become_user: "{{ user_name }}"
+
+- name: install home-manager
+  shell: |
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    nix-shell '<home-manager>' -A install
+  args:
+    creates: "/home/{{ user_name }}/.nix-profile/bin/home-manager"
+  become_user: "{{ user_name }}"
+
+######################
+# home-manger update #
+######################
+- name: home-manager switch
+  shell: |
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    home-manager switch
+  become_user: "{{ user_name }}"

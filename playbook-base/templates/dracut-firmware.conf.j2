@@ -1,0 +1,11 @@
+early_microcode=yes
+omit_dracutmodules+=" i18n "
+{% if 'amdgpu' in video_cards %}
+install_items+=" /lib/firmware/amdgpu/* "
+{% endif %}
+{% if 'i915' in video_cards or 'intel' in video_cards %}
+install_optional_items+=" /lib/firmware/i915/* "
+{% endif %}
+{% if 'nouveau' in video_cards %}
+install_optional_items+=" /lib/firmware/nouveau/* "
+{% endif %}

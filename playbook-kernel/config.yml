@@ -1,0 +1,16 @@
+---
+#####################################
+# gentoo uki, secure boot installer #
+#####################################
+
+uki_label_prefix: "Gentoo"
+extra_cmdline: "quiet loglevel=3"
+
+# new UKI is promoted to BootOrder[0]
+promote_new_to_default: false
+
+# Keep newest N UKIs
+keep_n_kernels: 3
+
+# Remove GRUB (package + /boot files + efibootmgr entry)
+remove_grub: false

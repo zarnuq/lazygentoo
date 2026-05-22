@@ -1,0 +1,18 @@
+---
+######################################
+# install pipewire and make mpd dirs #
+######################################
+- name: install PipeWire stack
+  command: >
+    emerge --quiet-build --noreplace
+    {{ audio_packages | join(' ') }}
+  async: 3600
+  poll: 30
+
+- name: create mpd data directory
+  file:
+    path: "/home/{{ user_name }}/.local/share/mpd"
+    state: directory
+    owner: "{{ user_name }}"
+    group: "{{ user_name }}"
+    mode: "0755"

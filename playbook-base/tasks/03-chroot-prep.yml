@@ -1,0 +1,34 @@
+---
+#######################
+# move in resolve.conf
+#######################
+- name: copy resolv.conf into chroot
+  copy:
+    src: /etc/resolv.conf
+    dest: "{{ chroot_dir }}/etc/resolv.conf"
+    remote_src: yes
+    mode: "0644"
+
+#######################
+# mount files in
+#######################
+- name: bind mount /proc, /sys, /dev, /run into chroot
+  shell: "mountpoint -q {{ chroot_dir }}{{ item.at }} || mount {{ item.how }} {{ chroot_dir }}{{ item.at }}"
+  args:
+    executable: /bin/bash
+  loop:
+    - { at: /proc, how: "-t proc none" }
+    - { at: /sys,  how: "--rbind /sys" }
+    - { at: /dev,  how: "--rbind /dev" }
+    - { at: /run,  how: "--rbind /run" }
+  loop_control:
+    label: "{{ item.at }}"
+  changed_when: false
+
+- name: mark rbind mounts as rslave
+  command: "mount --make-rslave {{ chroot_dir }}{{ item }}"
+  loop:
+    - /sys
+    - /dev
+    - /run
+  changed_when: false

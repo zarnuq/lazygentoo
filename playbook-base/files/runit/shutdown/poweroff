@@ -1,0 +1,29 @@
+#!/bin/sh
+# Runit-aware shutdown wrapper. Identical content for halt/poweroff/
+# reboot/shutdown — action is derived from $0 at runtime, so all four
+# files in this directory are interchangeable copies of this script.
+#
+# Under runit: chmods the right trigger file and signals PID 1.
+# Under any other PID 1 (e.g. OpenRC's sysvinit halt): falls through
+# to /usr/bin/<action> so this wrapper is safe to install system-wide.
+
+PID1=$(cat /proc/1/comm 2>/dev/null)
+action=$(basename "$0")
+
+case "$PID1" in
+    runit|runit-init)
+        case "$action" in
+            reboot)        exec /usr/bin/runit-init 6 ;;
+            halt|poweroff) exec /usr/bin/runit-init 0 ;;
+            shutdown)
+                case "$1" in
+                    -r*) exec /usr/bin/runit-init 6 ;;
+                    *)   exec /usr/bin/runit-init 0 ;;
+                esac
+                ;;
+        esac
+        ;;
+esac
+
+# Not runit, or unknown action: fall through to the real binary.
+exec /usr/bin/"$action" "$@"

@@ -1,0 +1,90 @@
+#!/bin/sh
+# /etc/kernel/install.d/95-efibootmgr-register.install
+# Register an efibootmgr entry for the just-installed UKI and
+# set --bootnext for a one-shot test of the new kernel. On
+# "remove", delete the matching entry.
+#
+# Uses $KERNEL_INSTALL_BOOT_ROOT and $KERNEL_INSTALL_ENTRY_TOKEN
+# from kernel-install(8) directly — no guessing, no parsing.
+# Matches efibootmgr output by UKI filename (unique per KVER)
+# rather than by label, which is robust against varying output
+# formats across efibootmgr versions.
+#
+# Managed by playbook-kernel/tasks/03-installkernel-hooks.yml.
+
+set -e
+
+COMMAND="${1:?}"
+KVER="${2:?}"
+
+[ "${KERNEL_INSTALL_LAYOUT:-}" = "uki" ] || exit 0
+
+# Policy knobs (label prefix, promotion behavior) come from
+# /etc/kernel/uki.env. ESP path and entry token come from
+# kernel-install env (authoritative).
+[ -r /etc/kernel/uki.env ] && . /etc/kernel/uki.env
+: "${LABEL_PREFIX:=Gentoo}"
+: "${PROMOTE_NEW_TO_DEFAULT:=false}"
+
+ESP="${KERNEL_INSTALL_BOOT_ROOT:?missing in env}"
+TOKEN="${KERNEL_INSTALL_ENTRY_TOKEN:?missing in env}"
+
+LABEL="${LABEL_PREFIX} ${KVER}"
+UKI_FILE="${TOKEN}-${KVER}.efi"
+UKI_PATH="${ESP}/EFI/Linux/${UKI_FILE}"
+
+# Find the BootXXXX hex id for the entry pointing at our UKI.
+# Match on UKI filename: it's unique per-KVER and appears in the
+# efibootmgr device path. Bulletproof against label parsing.
+find_id() {
+    efibootmgr | awk -v f="$1" '
+        /^Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]/ && index($0, f) > 0 {
+            sub(/^Boot/, "")
+            sub(/[* \t].*/, "")
+            print
+            exit
+        }'
+}
+
+case "$COMMAND" in
+add)
+    [ -f "$UKI_PATH" ] || {
+        echo "95-efibootmgr-register: UKI not present at $UKI_PATH, skipping" >&2
+        exit 0
+    }
+
+    if [ -z "$(find_id "$UKI_FILE")" ]; then
+        SRC=$(findmnt -nro SOURCE "$ESP")
+        case "$SRC" in
+            *nvme*n*p*) DISK="${SRC%p*}" ;;
+            *)          DISK="${SRC%[0-9]*}" ;;
+        esac
+        PART="${SRC##*[!0-9]}"
+        LOADER="$(echo "/EFI/Linux/${UKI_FILE}" | sed 's|/|\\|g')"
+        efibootmgr --create --disk "$DISK" --part "$PART" \
+            --label "$LABEL" --loader "$LOADER" --quiet
+        echo "95-efibootmgr-register: created entry '$LABEL'"
+    fi
+
+    NEW_ID=$(find_id "$UKI_FILE")
+    [ -z "$NEW_ID" ] && { echo "95-efibootmgr-register: failed to resolve new boot id" >&2; exit 1; }
+
+    if [ "$PROMOTE_NEW_TO_DEFAULT" = "true" ]; then
+        CUR_ORDER=$(efibootmgr | awk '/^BootOrder:/{print $2}')
+        NEW_ORDER=$(echo "$CUR_ORDER" | tr ',' '\n' | grep -v "^${NEW_ID}$" | paste -sd, -)
+        efibootmgr -o "${NEW_ID}${NEW_ORDER:+,${NEW_ORDER}}" --quiet
+        echo "95-efibootmgr-register: promoted $NEW_ID to BootOrder[0]"
+    else
+        efibootmgr --bootnext "$NEW_ID" --quiet
+        echo "95-efibootmgr-register: --bootnext $NEW_ID (boots once on next reboot)"
+    fi
+    ;;
+remove)
+    ID=$(find_id "$UKI_FILE")
+    [ -n "$ID" ] && {
+        efibootmgr -b "$ID" -B --quiet
+        echo "95-efibootmgr-register: removed entry '$LABEL'"
+    }
+    [ -f "$UKI_PATH" ] && rm -f "$UKI_PATH"
+    ;;
+esac

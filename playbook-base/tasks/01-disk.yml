@@ -1,0 +1,174 @@
+---
+#################################
+# disable swap as a check
+#################################
+- name: disable swap
+  command: swapoff --all
+  changed_when: false
+  failed_when: false
+
+#################################
+# wipe everything and write to partition table
+#################################
+- name: wipe and repartition target disk (single_boot)
+  when: not (dual_boot | bool)
+  block:
+    - name: remove partition tables
+      command: "sgdisk --zap-all {{ target_disk }}"
+      failed_when: false
+
+    - name: wipe filesystem signatures
+      command: "wipefs --all --force {{ target_disk }}"
+
+    - name: settle udev
+      command: udevadm settle
+      changed_when: false
+
+    - name: create new GPT label
+      command: "parted -s {{ target_disk }} mklabel gpt"
+
+    - name: create EFI partition
+      command: >
+        parted -s {{ target_disk }} mkpart ESP fat32
+        1MiB {{ 1 + efi_size_mib | int }}MiB
+
+    - name: mark EFI partition
+      command: "parted -s {{ target_disk }} set 1 esp on"
+
+    - name: create swap partition
+      command: >
+        parted -s {{ target_disk }} mkpart primary linux-swap
+        {{ 1 + efi_size_mib | int }}MiB
+        {{ 1 + efi_size_mib | int + swap_size_mib | int }}MiB
+      when: swap_size_mib | int > 0
+
+    - name: create root partition
+      command: >
+        parted -s {{ target_disk }} mkpart primary ext4
+        {{ 1 + efi_size_mib | int + swap_size_mib | int }}MiB 100%
+
+    - name: read partition table
+      command: "partprobe {{ target_disk }}"
+      changed_when: false
+
+- name: settle udev
+  command: udevadm settle
+  changed_when: false
+
+#################################
+# make file systems
+#################################
+- name: wipe per-partition signatures
+  command: "wipefs --all --force {{ item }}"
+  loop: "{{ [efi_part, root_part] + ([swap_part] if swap_size_mib | int > 0 else []) }}"
+
+- name: format EFI partition
+  command: "mkfs.vfat -F32 -n EFI {{ efi_part }}"
+
+- name: format swap partition (encrypt_swap=false)
+  command: "mkswap -L swap {{ swap_part }}"
+  when:
+    - swap_size_mib | int > 0
+    - not ((fde_enable | bool) and (encrypt_swap | bool))
+
+- name: enable swap
+  command: "swapon {{ swap_part }}"
+  when:
+    - swap_size_mib | int > 0
+    - not ((fde_enable | bool) and (encrypt_swap | bool))
+  changed_when: false
+
+#################################
+# LUKS setup
+#################################
+- name: LUKS format root partition
+  shell: |
+    set -eo pipefail
+    printf '%s' "{{ luks_passphrase }}" | cryptsetup luksFormat \
+      --type luks2 \
+      --cipher {{ luks_cipher }} \
+      --key-size {{ luks_key_size }} \
+      --hash {{ luks_hash }} \
+      --pbkdf {{ luks_pbkdf }} \
+      --batch-mode \
+      --key-file=- \
+      {{ root_part }}
+  args:
+    executable: /bin/bash
+  when: fde_enable
+  no_log: true
+
+- name: open LUKS root container
+  shell: |
+    set -eo pipefail
+    printf '%s' "{{ luks_passphrase }}" | cryptsetup open \
+      --type luks2 \
+      --key-file=- \
+      {{ root_part }} {{ luks_name }}
+  args:
+    executable: /bin/bash
+  when: fde_enable
+  no_log: true
+
+- name: format root on mapper if FDE else raw partition
+  command: "mkfs.ext4 -F -L gentoo {{ root_device }}"
+
+- name: make Gentoo mountpoint
+  file:
+    path: "{{ chroot_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: mount root
+  ansible.posix.mount:
+    path: "{{ chroot_dir }}"
+    src: "{{ root_device }}"
+    fstype: ext4
+    opts: "noatime"
+    state: mounted
+
+#################################
+# mount boot make boot filesystem
+#################################
+- name: make /boot mountpoint
+  file:
+    path: "{{ chroot_dir }}/boot"
+    state: directory
+    mode: "0755"
+
+- name: mount /boot
+  ansible.posix.mount:
+    path: "{{ chroot_dir }}/boot"
+    src: "{{ efi_part }}"
+    fstype: vfat
+    opts: "defaults"
+    state: mounted
+
+- name: get filesystem UUIDs for fstab
+  command: "blkid -s UUID -o value {{ item }}"
+  register: uuid_results
+  changed_when: false
+  loop:
+    - "{{ efi_part }}"
+    - "{{ root_device }}"
+
+- name: get LUKS partition UUID
+  command: "blkid -s UUID -o value {{ root_part }}"
+  register: luks_uuid_result
+  changed_when: false
+  when: fde_enable
+
+- name: get swap UUID (encrypt_swap=false)
+  command: "blkid -s UUID -o value {{ swap_part }}"
+  register: swap_uuid_result
+  changed_when: false
+  when:
+    - swap_size_mib | int > 0
+    - not ((fde_enable | bool) and (encrypt_swap | bool))
+
+- name: save UUIDs
+  set_fact:
+    efi_uuid:  "{{ uuid_results.results[0].stdout | trim }}"
+    root_uuid: "{{ uuid_results.results[1].stdout | trim }}"
+    luks_uuid: "{{ (luks_uuid_result.stdout | default('') | trim) if (fde_enable | bool) else '' }}"
+    swap_uuid: "{{ (swap_uuid_result.stdout | default('') | trim) if (swap_size_mib | int > 0 and not ((fde_enable | bool) and (encrypt_swap | bool))) else '' }}"

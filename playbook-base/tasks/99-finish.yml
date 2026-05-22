@@ -1,0 +1,28 @@
+---
+#############################################
+# unmount and finish
+#############################################
+- name: Unmount chroot binds (run, dev, sys, proc) recursively
+  command: "umount -lR {{ chroot_dir }}/{{ item }}"
+  loop:
+    - run
+    - dev
+    - sys
+    - proc
+  failed_when: false
+  changed_when: false
+
+- name: Disable swap on the new system's swap partition
+  command: "swapoff {{ swap_part }}"
+  when: swap_size_mib | int > 0
+  failed_when: false
+  changed_when: false
+
+- name: Unmount ESP and / from {{ chroot_dir }}
+  ansible.posix.mount:
+    path: "{{ item }}"
+    state: unmounted
+  loop:
+    - "{{ chroot_dir }}{{ esp_mountpoint }}"
+    - "{{ chroot_dir }}"
+  failed_when: false

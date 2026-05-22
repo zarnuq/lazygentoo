@@ -1,0 +1,79 @@
+---
+#########################################
+# set locale, keymaps, hostname, hosts
+#########################################
+- name: symlink /etc/localtime to the configured zoneinfo file
+  file:
+    src: "../usr/share/zoneinfo/{{ timezone }}"
+    dest: "{{ chroot_dir }}/etc/localtime"
+    state: link
+    force: yes
+
+- name: write /etc/locale.gen
+  copy:
+    dest: "{{ chroot_dir }}/etc/locale.gen"
+    mode: "0644"
+    content: |
+      {% for l in locales %}
+      {{ l }}
+      {% endfor %}
+
+- name: generate locales
+  command: chroot {{ chroot_dir }} /bin/bash -lc "locale-gen"
+
+- name: set locale
+  command: chroot {{ chroot_dir }} /bin/bash -lc "eselect locale set {{ default_locale }}"
+
+- name: set keymap
+  lineinfile:
+    path: "{{ chroot_dir }}/etc/conf.d/keymaps"
+    regexp: '^keymap='
+    line: 'keymap="{{ keymap }}"'
+    create: yes
+    mode: "0644"
+
+- name: set hostname
+  copy:
+    dest: "{{ chroot_dir }}/etc/conf.d/hostname"
+    mode: "0644"
+    content: |
+      hostname="{{ hostname }}"
+
+- name: write /etc/hosts
+  copy:
+    dest: "{{ chroot_dir }}/etc/hosts"
+    mode: "0644"
+    content: |
+      127.0.0.1   localhost {{ hostname }}
+      ::1         localhost {{ hostname }}
+
+
+#########################################
+# write filesystem tables
+#########################################
+- name: write /etc/fstab
+  template:
+    src: fstab.j2
+    dest: "{{ chroot_dir }}/etc/fstab"
+    mode: "0644"
+
+- name: write /etc/crypttab (encrypt_swap=true)
+  copy:
+    dest: "{{ chroot_dir }}/etc/crypttab"
+    mode: "0644"
+    content: |
+      # <name>  <device>           <key file>     <options>
+      swap      {{ swap_part }}    /dev/urandom   swap,cipher=aes-xts-plain64,size=256
+  when:
+    - fde_enable | bool
+    - encrypt_swap | bool
+    - swap_size_mib | int > 0
+
+#########################################
+# root password set
+#########################################
+- name: set root password
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "echo 'root:{{ root_password }}' | chpasswd"
+  no_log: true

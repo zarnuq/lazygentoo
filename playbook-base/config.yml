@@ -1,0 +1,175 @@
+---
+# MAIN CONFIG 
+
+###############
+# SINGLE BOOT #
+###############
+
+# Target disk
+target_disk: "/dev/nvme0n1"
+
+# Partition sizes in MB (for single boot)
+efi_size_mib: 1028       # EFI System Partition /boot
+swap_size_mib: 4096      # set to 0 to skip swap
+
+#############
+# DUAL BOOT #
+#############
+
+# Option for dual boot (must have partitions made already!)
+dual_boot: true
+
+# Partitions that will be written to (for dual boot only)
+efi_part_override:  "/dev/nvme0n1p4"    # Linux's ESP (FAT32, mounted at /boot)
+swap_part_override: "/dev/nvme0n1p5"    # swap (omit / leave "" if swap_size_mib=0)
+root_part_override: "/dev/nvme0n1p6"    # Linux root (ext4)
+
+######################
+# ENCRYPTION OPTIONS #
+######################
+
+fde_enable: false
+luks_name: "cryptroot"
+luks_cipher: "aes-xts-plain64"
+luks_key_size: 512
+luks_hash: "sha512"
+luks_pbkdf: "argon2id"
+encrypt_swap: true
+
+#########################
+# LOCALE, TIMEZONE, ETC #
+#########################
+hostname: "gentoo"
+timezone: "America/New_York"
+locales:
+  - "en_US.UTF-8 UTF-8"
+default_locale: "en_US.utf8"
+keymap: "us"
+
+#########
+# USERS #
+#########
+root_password: "changeme"
+
+create_user: true
+user_name: "miles"
+user_password: "changeme"
+user_groups:
+  - wheel
+  - audio
+  - video
+  - input
+  - usb
+  - plugdev
+  - seat
+user_shell: "/bin/bash"
+ssh_authorized_keys: 
+    - ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA me@gentoo
+
+#########################
+# STAGE3 SOURCE/PROFILE #
+#########################
+
+# Mirror used for the stage3 tarball download.
+gentoo_mirror: "https://distfiles.gentoo.org/releases/amd64/autobuilds"
+
+# Init choice
+stage3_pointer: "current-stage3-amd64-openrc/latest-stage3-amd64-openrc.txt"
+
+# Profile
+gentoo_profile: "default/linux/amd64/23.0/desktop"
+
+####################
+# COMPILER OPTIONS #
+####################
+
+common_flags: "-march=native -O2 -pipe"
+makeopts_jobs: 0          # 0 = auto (use detected vCPUs)
+emerge_jobs: 0            # 0 = ceil(vCPUs/2)
+portage_tmpfs: true       # false = use disk (/var/tmp)
+accept_keywords: "amd64"  # use "~amd64" for testing branch
+accept_license: "*"
+
+# Global USE flags. Per-package USE goes in tasks/04-portage.yml.
+use_flags:
+  - networkmanager           # explicit; pulls NM into virtuals
+  - pipewire                 # native pipewire support in apps that gate it
+  - wayland                  # ditto for wayland output paths
+  - screencast               # xdg-desktop-portal-wlr screen-capture path
+  - vaapi                    # GPU-accelerated video decode (Intel/AMD via Mesa)
+  - vulkan                   # Vulkan API — Mesa drivers + wlroots vulkan backend
+  - "-elogind"               # seatd-only — kills elogind→polkit→gnome chain
+  - "-systemd"               # non-systemd stack; defensive
+  - "-consolekit"            # conflicts with seatd
+  - "-bluetooth"             # no BT stack on this laptop
+  - "-cups"                  # no printer (drop the - if you ever print)
+  - "-ppds"                  # printer drivers, paired with cups
+  - "-gpm"                   # console mouse — useless under Wayland
+  - "-startup-notification"  # X11-only legacy
+  - "-cdda"                  # no optical drive
+  - "-cdr"                   # ditto
+  - "-dvd"                   # ditto
+  - "-dvdr"                  # ditto
+  - "-mad"                   # obsolete mp3 lib; ffmpeg covers it
+  - "-sdl"                   # SDL1 — obsolete (SDL2 is sdl2 separately)
+  - "-wxwidgets"             # nothing in the package set uses it
+  - "-xv"                    # Xv extension; XWayland doesn't use it
+  - "-gnome"                 # dwl, not GNOME — drops GNOME-specific hooks
+  - "-nautilus"              # using nemo; no nautilus extension hooks
+  - "-tracker"               # GNOME's file-indexer daemon; not wanted
+  - "-branding"              # GNOME-branded artwork variants in icon themes
+  - "-dts"                   # standalone DTS audio decoder; ffmpeg has internal DTS
+  - "-a52"                   # standalone AC3 audio decoder; ffmpeg covers it
+  - "-spell"                 # drop hunspell/enchant linkage in apps
+  - "-gdbm"                  # GNU dbm linkage; nothing in this set uses it
+  - "-jpegxl"                # JPEG XL image format — niche, slow build
+
+###################
+# SERVICE OPTIONS #
+###################
+
+# networking options
+network_stack: "networkmanager"   # networkmanager | dhcpcd
+
+# check ./files/runit/sv for list of services that you can enable
+runit_services:
+  - sysklogd
+  - udevd
+  - sshd
+  - seatd
+  - chronyd
+
+#################
+# BASE PACKAGES #
+#################
+
+base_packages:
+
+  # boot
+  - sys-boot/grub                # bootloader
+  - sys-kernel/linux-firmware    # binary firmware blobs
+  - sys-kernel/installkernel     # post-emerge hook
+  - sys-kernel/gentoo-kernel-bin # prebuilt distribution kernel
+
+  # init / core
+  - sys-process/cronie           # cron daemon
+  - app-admin/sysklogd           # syslog daemon
+
+  # network + ntp
+  - net-misc/chrony              # NTP client
+  - net-misc/openssh             # ssh
+
+  # privilege escalation
+  - app-admin/sudo               # sudo
+
+  # session managers
+  - sys-apps/dbus                # IPC bus
+  - sys-auth/seatd               # seat manager
+
+  # misc
+  - dev-util/wayland-scanner     # generates C bindings from XML protocol files
+  - dev-util/ccache              # caches compiled object files
+  - app-editors/vim              # editor
+  - sys-fs/dosfstools            # mkfs.vfat
+  - sys-fs/e2fsprogs             # mkfs.ext4
+  - sys-fs/cryptsetup            # LUKS unlock

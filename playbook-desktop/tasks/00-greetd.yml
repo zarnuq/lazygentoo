@@ -1,0 +1,46 @@
+---
+###################
+# install greeter #
+###################
+- name: install greetd, tuigreet
+  command: emerge --quiet-build --noreplace gui-libs/greetd gui-apps/tuigreet
+  async: 3600
+  poll: 30
+
+- name: make sure greetd config dir exists
+  file:
+    path: /etc/greetd
+    state: directory
+    mode: "0755"
+
+- name: write greetd config
+  template:
+    src: greetd-config.toml.j2
+    dest: /etc/greetd/config.toml
+    mode: "0644"
+
+- name: ensure tuigreet cache dir exists
+  file:
+    path: /var/cache/tuigreet
+    state: directory
+    mode: "0755"
+
+- name: chown tuigreet cache dir
+  command: chown greetd:greetd /var/cache/tuigreet
+  changed_when: false
+
+- name: add greetd user to groups
+  command: gpasswd -a greetd {{ item }}
+  loop:
+    - seat
+    - tty
+    - input
+  register: greetd_groups
+  changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
+
+- name: Enable greetd as a runit service (symlink into /etc/service)
+  file:
+    src: /etc/sv/greetd
+    dest: /etc/service/greetd
+    state: link
+    force: yes

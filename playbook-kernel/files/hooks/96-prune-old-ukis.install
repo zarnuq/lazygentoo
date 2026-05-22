@@ -1,0 +1,47 @@
+#!/bin/sh
+# /etc/kernel/install.d/96-prune-old-ukis.install
+# Keep the newest KEEP_N_KERNELS UKIs on the ESP. Delete older
+# ones (file + efibootmgr entry). NEVER touch the currently-
+# running kernel — losing it + a failed boot of the new one
+# strands the machine.
+#
+# Uses $KERNEL_INSTALL_BOOT_ROOT and $KERNEL_INSTALL_ENTRY_TOKEN
+# from kernel-install(8) env. Matches efibootmgr entries by UKI
+# filename (unique per KVER) rather than label.
+#
+# Managed by playbook-kernel/tasks/03-installkernel-hooks.yml.
+
+set -e
+
+COMMAND="${1:?}"
+
+[ "${COMMAND}" = "add" ] || exit 0
+[ "${KERNEL_INSTALL_LAYOUT:-}" = "uki" ] || exit 0
+
+[ -r /etc/kernel/uki.env ] && . /etc/kernel/uki.env
+: "${KEEP_N_KERNELS:=3}"
+
+ESP="${KERNEL_INSTALL_BOOT_ROOT:?missing in env}"
+TOKEN="${KERNEL_INSTALL_ENTRY_TOKEN:?missing in env}"
+
+RUNNING_KVER=$(uname -r)
+UKI_DIR="${ESP}/EFI/Linux"
+
+ls -1t "${UKI_DIR}/${TOKEN}-"*.efi 2>/dev/null | tail -n "+$((KEEP_N_KERNELS + 1))" | \
+while IFS= read -r uki; do
+    fname=$(basename "$uki")
+    kver="${fname#${TOKEN}-}"; kver="${kver%.efi}"
+    if [ "$kver" = "$RUNNING_KVER" ]; then
+        echo "96-prune-old-ukis: skip currently-running $kver"
+        continue
+    fi
+    boot_id=$(efibootmgr | awk -v f="$fname" '
+        /^Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]/ && index($0, f) > 0 {
+            sub(/^Boot/, ""); sub(/[* \t].*/, ""); print; exit
+        }')
+    [ -n "$boot_id" ] && efibootmgr -b "$boot_id" -B --quiet
+    rm -f "$uki"
+    echo "96-prune-old-ukis: pruned $uki"
+done
+
+exit 0

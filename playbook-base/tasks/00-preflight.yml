@@ -1,0 +1,112 @@
+
+---
+#################################
+# Checks that root is not on the target_disk
+#################################
+- name: Check running on live installer 
+  shell: |
+    set -e
+    rootdev=$(findmnt -no SOURCE / | sed 's/[0-9p]*$//')
+    if [ "$rootdev" = "{{ target_disk }}" ]; then
+      echo "REFUSING: target_disk {{ target_disk }} is the live system's root."
+      exit 1
+    fi
+  changed_when: false
+
+#################################
+# Check that target_disk exists. fail if its not there
+#################################
+- name: check target disk exists
+  stat:
+    path: "{{ target_disk }}"
+  register: disk_stat
+
+- name: Fail if target disk missing
+  fail:
+  when: not disk_stat.stat.exists
+
+#################################
+# Find and Set CPU/GPU flags automatically
+#################################
+- name: identify CPU
+  set_fact:
+    cpu_microcode: >-
+      {%- set vendor = ansible_processor[1] | default('') -%}
+      {%- if 'AuthenticAMD' in vendor -%}amd
+      {%- elif 'GenuineIntel' in vendor -%}intel
+      {%- else -%}{%- endif -%}
+
+- name: identify GPU
+  shell: "lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true"
+  register: gpu_lspci
+  changed_when: false
+
+- name: identify video_cards from lspci output
+  set_fact:
+    video_cards: >-
+      {%- set out = gpu_lspci.stdout | default('') -%}
+      {%- set parts = [] -%}
+      {%- if 'AMD' in out or 'ATI' in out or 'Advanced Micro Devices' in out -%}{%- set _ = parts.extend(['amdgpu', 'radeonsi']) -%}{%- endif -%}
+      {%- if 'Intel' in out -%}{%- set _ = parts.append('intel') -%}{%- endif -%}
+      {%- if 'NVIDIA' in out -%}{%- set _ = parts.append('nvidia') -%}{%- endif -%}
+      {{ parts | join(' ') }}
+
+- name: stop if GPU not found
+  fail:
+  when: video_cards | trim == ""
+
+#################################
+# checks that every partition is named specifically before wiping partitions
+#################################
+- name: Validate dual-boot overrides are set when dual_boot=true
+  fail:
+  when:
+    - dual_boot | bool
+    - (efi_part_override  | default('') | trim) == ''
+      or (root_part_override | default('') | trim) == ''
+      or ((swap_size_mib | int > 0) and (swap_part_override | default('') | trim) == '')
+
+- name: Verify dual-boot partitions exist
+  stat:
+    path: "{{ item }}"
+  register: dualboot_part_stat
+  loop: "{{ [efi_part, root_part] + ([swap_part] if swap_size_mib | int > 0 else []) }}"
+  when: dual_boot | bool
+
+- name: Fail if any dual-boot partition is missing
+  fail:
+  loop: "{{ dualboot_part_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - dual_boot | bool
+    - not item.stat.exists
+
+#################################
+# ask for the LUKS passphrase and set it for later
+#################################
+- name: Prompt for LUKS passphrase
+  pause:
+    prompt: "Enter LUKS passphrase for root encryption"
+    echo: no
+  register: _luks_pp1
+  when: fde_enable
+  no_log: true
+
+- name: Confirm LUKS passphrase
+  pause:
+    prompt: "Re-enter LUKS passphrase to confirm"
+    echo: no
+  register: _luks_pp2
+  when: fde_enable
+  no_log: true
+
+- name: Fail if LUKS passphrases do not match
+  fail:
+  when: fde_enable and _luks_pp1.user_input != _luks_pp2.user_input
+
+- name: Stash LUKS passphrase as fact
+  set_fact:
+    luks_passphrase: "{{ _luks_pp1.user_input }}"
+  when: fde_enable
+  no_log: true

@@ -1,0 +1,15 @@
+---
+###########
+# set zsh #
+###########
+- name: Point system-wide zsh at $HOME/.config/zsh
+  lineinfile:
+    path: /etc/zsh/zshenv
+    line: 'export ZDOTDIR=$HOME/.config/zsh'
+    create: yes
+    mode: "0644"
+
+- name: Set zsh as miles' login shell
+  user:
+    name: "{{ user_name }}"
+    shell: /bin/zsh

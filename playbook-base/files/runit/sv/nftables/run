@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stateless firewall loader. nft -f exits after applying the ruleset,
+# so we then `chpst -b nftables pause` to keep runsv from respawning.
+# The matching finish script flushes on stop.
+exec 2>&1
+set -e
+[ -r /etc/nftables.conf ] && /usr/sbin/nft -f /etc/nftables.conf
+exec chpst -b nftables pause

@@ -1,0 +1,63 @@
+---
+############################################
+# install bin kernel, cmdline, initramfs, and microcodes
+############################################
+- name: check /etc/kernel exists in chroot
+  file:
+    path: "{{ chroot_dir }}/etc/kernel"
+ 
+    mode: "0755"
+
+- name: make root kernel cmdline
+  set_fact:
+    root_cmdline: >-
+      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype=ext4 rw quiet loglevel=3
+
+- name: write kernel cmdline
+  copy:
+    dest: "{{ chroot_dir }}/etc/kernel/cmdline"
+    mode: "0644"
+    content: "{{ root_cmdline | trim }}\n"
+
+- name: check /etc/dracut.conf.d exists in chroot
+  file:
+    path: "{{ chroot_dir }}/etc/dracut.conf.d"
+    state: directory
+    mode: "0755"
+
+- name: write dracut cmdline
+  copy:
+    dest: "{{ chroot_dir }}/etc/dracut.conf.d/cmdline.conf"
+    mode: "0644"
+    content: "kernel_cmdline=\"{{ root_cmdline | trim }}\"\n"
+
+- name: write dracut firmware/early-microcode/i18n config
+  template:
+    src: dracut-firmware.conf.j2
+    dest: "{{ chroot_dir }}/etc/dracut.conf.d/firmware.conf"
+    mode: "0644"
+
+- name: write dracut crypt config (fde_enable=true)
+  copy:
+    dest: "{{ chroot_dir }}/etc/dracut.conf.d/crypt.conf"
+    mode: "0644"
+    content: |
+      add_dracutmodules+=" crypt dm rootfs-block "
+  when: fde_enable
+
+- name: install cryptsetup ahead of kernel build (FDE only)
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "emerge --quiet-build sys-fs/cryptsetup"
+  when: fde_enable
+
+- name: install firmware, binary kernel, installkernel
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "emerge --quiet-build sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/gentoo-kernel-bin"
+  async: 7200
+  poll: 30
+
+- name: install intel microcode
+  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-firmware/intel-microcode"
+  when: cpu_microcode == "intel"

@@ -1,0 +1,18 @@
+# <fs>                   <mountpoint>  <type>  <opts>                  <dump/pass>
+UUID={{ root_uuid }}    /             ext4   noatime,defaults    0 1
+UUID={{ efi_uuid }}     {{ esp_mountpoint }}          vfat    defaults                 0 2
+{% if swap_size_mib | int > 0 %}
+{% if fde_enable and encrypt_swap %}
+# Encrypted swap: dm-crypt opens the partition with a random key
+# at every boot (see /etc/crypttab). No hibernation across reboots.
+/dev/mapper/swap        none          swap    sw                       0 0
+{% else %}
+UUID={{ swap_uuid }}    none          swap    sw                       0 0
+{% endif %}
+{% endif %}
+tmpfs                   /tmp          tmpfs   defaults,nosuid,nodev    0 0
+{% if portage_tmpfs %}
+# Portage build dir in RAM. size=50% caps tmpfs at half RAM;
+# builds that overflow spill to swap rather than OOM.
+tmpfs                   /var/tmp/portage  tmpfs  defaults,nodev,size=50%,uid=portage,gid=portage,mode=775  0 0
+{% endif %}

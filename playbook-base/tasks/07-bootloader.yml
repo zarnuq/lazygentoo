@@ -1,0 +1,67 @@
+---
+##################################
+# install grub, os-prober if needed, and tell cmdline to use runit
+##################################
+- name: check UEFI
+  stat:
+    path: /sys/firmware/efi
+  register: efi_present
+
+- name: fail if not UEFI
+  fail:
+  when: not efi_present.stat.exists
+
+- name: set GRUB_PLATFORMS=efi-64 in make.conf
+  lineinfile:
+    path: "{{ chroot_dir }}/etc/portage/make.conf"
+    regexp: '^GRUB_PLATFORMS='
+    line: 'GRUB_PLATFORMS="efi-64"'
+
+- name: package USE grub for os-prober (dual_boot=true)
+  copy:
+    dest: "{{ chroot_dir }}/etc/portage/package.use/grub"
+    mode: "0644"
+    content: "sys-boot/grub mount\n"
+  when: dual_boot | bool
+
+- name: install grub
+  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-boot/grub"
+  async: 3600
+  poll: 30
+
+- name: install grub to /boot
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "grub-install --target=x86_64-efi --efi-directory={{ esp_mountpoint }} --bootloader-id=Gentoo --recheck"
+
+- name: set kernel cmdline
+  set_fact:
+    kernel_cmdline: >-
+      {{ (('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '')
+         + 'quiet loglevel=3 init=/usr/bin/runit-init' }}
+
+- name: quiet kernel cmdline in /etc/default/grub
+  lineinfile:
+    path: "{{ chroot_dir }}/etc/default/grub"
+    regexp: '^#?GRUB_CMDLINE_LINUX_DEFAULT='
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ kernel_cmdline | trim }}"'
+    state: present
+    create: yes
+    mode: "0644"
+
+- name: install os-prober (dual_boot=true)
+  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-boot/os-prober"
+  when: dual_boot | bool
+
+- name: enable os-prober in /etc/default/grub (dual_boot=true)
+  lineinfile:
+    path: "{{ chroot_dir }}/etc/default/grub"
+    regexp: '^#?GRUB_DISABLE_OS_PROBER='
+    line: 'GRUB_DISABLE_OS_PROBER=false'
+    state: present
+    create: yes
+    mode: "0644"
+  when: dual_boot | bool
+
+- name: Generate grub.cfg
+  command: chroot {{ chroot_dir }} /bin/bash -lc "grub-mkconfig -o /boot/grub/grub.cfg"

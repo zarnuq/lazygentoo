@@ -1,0 +1,54 @@
+---
+##############################
+# set ufw firewall whitelist #
+##############################
+- name: load netfilter modules so ufw's first iptables call doesn't race
+  command: "modprobe {{ item }}"
+  loop:
+    - ip_tables
+    - ip6_tables
+    - iptable_filter
+    - ip6table_filter
+    - nf_conntrack
+  changed_when: false
+  failed_when: false
+
+- name: ufw allow inbound TCP ports
+  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw allow {{ item }}/tcp 2>&1"
+  loop: "{{ ufw_allowed_tcp_ports | default([]) }}"
+  loop_control:
+    label: "{{ item }}/tcp"
+  register: ufw_tcp
+  changed_when: "'Rule added' in ufw_tcp.stdout"
+  failed_when:
+    - ufw_tcp.rc != 0
+    - "'Skipping adding existing rule' not in ufw_tcp.stdout"
+
+- name: ufw allow inbound UDP ports
+  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw allow {{ item }}/udp 2>&1"
+  loop: "{{ ufw_allowed_udp_ports | default([]) }}"
+  loop_control:
+    label: "{{ item }}/udp"
+  register: ufw_udp
+  changed_when: "'Rule added' in ufw_udp.stdout"
+  failed_when:
+    - ufw_udp.rc != 0
+    - "'Skipping adding existing rule' not in ufw_udp.stdout"
+
+- name: ufw enable
+  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw --force enable 2>&1"
+  register: ufw_enable
+  changed_when: "'Firewall is active' in ufw_enable.stdout"
+
+- name: ufw set ENABLED=yes
+  lineinfile:
+    path: /etc/ufw/ufw.conf
+    regexp: '^ENABLED='
+    line: 'ENABLED=yes'
+
+- name: Enable ufw as a runit service
+  file:
+    src: /etc/sv/ufw
+    dest: /etc/service/ufw
+    state: link
+    force: yes

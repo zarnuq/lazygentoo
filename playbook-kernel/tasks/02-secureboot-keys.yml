@@ -1,0 +1,19 @@
+---
+######################################
+# generate + enroll secure boot keys #
+######################################
+
+- stat: { path: /usr/share/secureboot/GUID }
+  register: sb_keys
+
+- name: generate sbctl keys (first run)
+  command: sbctl create-keys
+  when: not sb_keys.stat.exists
+
+- command: sbctl status --json
+  register: sb_status
+  changed_when: false
+
+- name: enroll keys (need bios to be in setup mode)
+  command: sbctl enroll-keys -m
+  when: '''"setup_mode":true'' in sb_status.stdout'

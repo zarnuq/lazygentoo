@@ -1,0 +1,45 @@
+---
+######################################
+# install UKI, secure boot toolchain #
+######################################
+
+- name: systemd-utils USE flags
+  copy:
+    dest: /etc/portage/package.use/systemd-utils
+    mode: "0644"
+    content: "sys-apps/systemd-utils boot ukify kernel-install\n"
+
+- name: emerge systemd-utils
+  command: emerge --quiet-build --newuse sys-apps/systemd-utils
+  register: sdu
+  changed_when: "'>>> Installing' in sdu.stdout or '>>> Merging' in sdu.stdout"
+
+- name: install eselect-repository
+  command: emerge --quiet-build --noreplace app-eselect/eselect-repository
+
+- name: check if guru is enabled
+  shell: eselect repository list -i | grep -q guru
+  register: guru_check
+  failed_when: false
+  changed_when: false
+
+- name: sync guru
+  shell: eselect repository enable guru && emaint sync -r guru
+  when: guru_check.rc != 0
+
+- name: install dependencies
+  command: >
+    emerge --quiet-build --noreplace
+    sys-kernel/linux-firmware
+    sys-kernel/dracut
+    sys-apps/systemd-utils
+    sys-boot/efibootmgr
+    app-crypt/sbctl
+  async: 3600
+  poll: 30
+
+- name: install intel microcode if needed
+  shell: |
+    [ "$(awk -F: '/vendor_id/{gsub(/ /,"",$2); print $2; exit}' /proc/cpuinfo)" = "GenuineIntel" ] \
+      && emerge --quiet-build --noreplace sys-firmware/intel-microcode || true
+  changed_when: false

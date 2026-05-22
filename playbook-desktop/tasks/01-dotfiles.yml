@@ -1,0 +1,28 @@
+---
+###########################
+# clone and stow dotfiles #
+###########################
+- name: install git, stow
+  command: emerge --quiet-build --noreplace dev-vcs/git app-admin/stow
+
+- name: pre-create $HOME directories so stow works properly
+  file:
+    path: "/home/{{ user_name }}/{{ item }}"
+    state: directory
+    owner: "{{ user_name }}"
+    group: "{{ user_name }}"
+    mode: "0755"
+  loop: "{{ home_premkdir }}"
+
+- name: clone dotfiles repo to ~/dotfiles
+  git:
+    repo: "{{ dotfiles_repo }}"
+    dest: "/home/{{ user_name }}/dotfiles"
+    version: "{{ dotfiles_branch }}"
+    update: yes
+  become_user: "{{ user_name }}"
+
+- name: stow ~/dotfiles into $HOME
+  command: stow -d /home/{{ user_name }}/dotfiles -t /home/{{ user_name }} {{ item }}
+  loop: "{{ stow_packages }}"
+  become_user: "{{ user_name }}"

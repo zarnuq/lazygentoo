@@ -1,0 +1,41 @@
+---
+#########################
+# build and install dwl #
+#########################
+- name: apply package USE overrides
+  copy:
+    src: portage/package.use/
+    dest: /etc/portage/package.use/
+    mode: "0644"
+
+- name: install dwl dependencies
+  command: >
+    emerge --quiet-build --noreplace --with-bdeps=y
+    {{ dwl_build_deps | map('quote') | join(' ') }}
+  async: 7200
+  poll: 30
+
+- name: stat each dwl source dir
+  stat:
+    path: "/home/{{ user_name }}/.local/src/{{ item.name }}"
+  register: dwl_src_stats
+  loop: "{{ dwl_build_dirs }}"
+
+- name: fail if any dwl source dir is missing
+  fail:
+  vars:
+    missing: "{{ dwl_src_stats.results | rejectattr('stat.exists') | map(attribute='item.name') | list }}"
+  when: missing | length > 0
+
+- name: build each dwl source (as {{ user_name }})
+  command: "make {{ item.build_args }}"
+  args:
+    chdir: "/home/{{ user_name }}/.local/src/{{ item.name }}"
+  become_user: "{{ user_name }}"
+  loop: "{{ dwl_build_dirs }}"
+
+- name: install each dwl source to /usr/local
+  command: make install
+  args:
+    chdir: "/home/{{ user_name }}/.local/src/{{ item.name }}"
+  loop: "{{ dwl_build_dirs }}"

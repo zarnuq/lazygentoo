@@ -1,0 +1,30 @@
+---
+#####################################################
+# install packages in config and networking daemon and xdg_runtime_dir
+#####################################################
+- name: install base packages
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "emerge --quiet-build --noreplace {{ base_packages | join(' ') }}"
+  async: 14400
+  poll: 30
+
+- name: install network daemon ({{ network_stack }})
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "emerge --quiet-build --noreplace net-misc/{{ 'networkmanager' if network_stack == 'networkmanager' else 'dhcpcd' }}"
+
+- name: disable polkit in NetworkManager
+  copy:
+    dest: "{{ chroot_dir }}/etc/NetworkManager/NetworkManager.conf"
+    mode: "0644"
+    content: |
+      [main]
+      auth-polkit=false
+  when: network_stack == "networkmanager"
+
+- name: set XDG_RUNTIME_DIR for shell
+  copy:
+    src: profile.d/xdg-runtime-dir.sh
+    dest: "{{ chroot_dir }}/etc/profile.d/xdg-runtime-dir.sh"
+    mode: "0644"
