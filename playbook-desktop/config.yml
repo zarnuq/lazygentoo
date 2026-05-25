@@ -78,7 +78,7 @@ apps_packages:
   - app-editors/neovim
 
   # Wayland + dwl ecosystem
-  - x11-misc/dunst
+  - gui-apps/mako
   - x11-misc/gammastep
   - gui-apps/qt6ct
   - x11-themes/kvantum
