@@ -1,7 +1,7 @@
 ---
-######################################
-# install pipewire and make mpd dirs #
-######################################
+###############################################
+# install pipewire, make mpd dirs, get pweq EQ #
+###############################################
 - name: install PipeWire stack
   command: >
     emerge --quiet-build --noreplace
@@ -16,3 +16,15 @@
     owner: "{{ user_name }}"
     group: "{{ user_name }}"
     mode: "0755"
+
+- name: clone pweq (PipeWire EQ configurator) to ~/.local/src/pweq
+  git:
+    repo: "{{ pweq_repo }}"
+    dest: "/home/{{ user_name }}/.local/src/pweq"
+    version: "{{ pweq_branch }}"
+    update: yes
+  become_user: "{{ user_name }}"
+
+- name: stow pweq into ~/.local/bin
+  command: stow -d /home/{{ user_name }}/.local/src -t /home/{{ user_name }}/.local/bin pweq
+  become_user: "{{ user_name }}"

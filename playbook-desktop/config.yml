@@ -16,6 +16,10 @@ stow_packages:
 wallpapers_repo: "https://github.com/zarnuq/bgs"
 wallpapers_branch: "main"
 
+# pweq (PipeWire EQ configurator) repo
+pweq_repo: "https://github.com/zarnuq/pweq"
+pweq_branch: "main"
+
 # nix channel and home-manager branch
 nix_channel: "nixpkgs-unstable"
 home_manager_branch: "master"
