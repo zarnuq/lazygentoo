@@ -176,7 +176,7 @@ base_packages:
   - net-misc/openssh             # ssh
 
   # privilege escalation
-  - app-admin/sudo               # sudo
+  - app-admin/doas               # doas (minimal sudo replacement; desktop become_method=doas)
 
   # session managers
   - sys-apps/dbus                # IPC bus
