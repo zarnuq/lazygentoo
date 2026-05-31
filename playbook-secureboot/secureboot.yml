@@ -1,0 +1,19 @@
+---
+#################################################
+# enroll secure boot keys + sign the UKI from base #
+#################################################
+
+- name: Enroll Secure Boot keys and sign the UKI
+  hosts: gentoo
+  gather_facts: yes
+  become: yes
+  any_errors_fatal: true
+
+  vars_files:
+    - config.yml
+
+  tasks:
+    - import_tasks: tasks/00-preflight.yml
+    - import_tasks: tasks/01-packages.yml
+    - import_tasks: tasks/02-secureboot-keys.yml
+    - import_tasks: tasks/03-sign.yml

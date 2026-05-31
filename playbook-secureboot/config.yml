@@ -1,0 +1,8 @@
+---
+####################################
+# gentoo secure boot key enrollment #
+####################################
+
+# sbctl-generated db key/cert used to sign the UKI built by playbook-base.
+sb_db_key:  "/usr/share/secureboot/keys/db/db.key"
+sb_db_cert: "/usr/share/secureboot/keys/db/db.pem"

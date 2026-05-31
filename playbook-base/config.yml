@@ -36,6 +36,16 @@ luks_hash: "sha512"
 luks_pbkdf: "argon2id"
 encrypt_swap: true
 
+####################
+# BOOTLOADER (UKI) #
+####################
+
+# Boots a UKI directly via efibootmgr (no grub). Secure Boot key
+# enrollment is handled separately by playbook-kernel.
+uki_label_prefix: "Gentoo"    # efibootmgr entry label prefix
+keep_n_kernels: 3             # keep newest N UKIs on the ESP
+promote_new_to_default: true  # set the new UKI as BootOrder[0]
+
 #########################
 # LOCALE, TIMEZONE, ETC #
 #########################
@@ -146,7 +156,6 @@ runit_services:
 base_packages:
 
   # boot
-  - sys-boot/grub                # bootloader
   - sys-kernel/linux-firmware    # binary firmware blobs
   - sys-kernel/installkernel     # post-emerge hook
   - sys-kernel/gentoo-kernel-bin # prebuilt distribution kernel

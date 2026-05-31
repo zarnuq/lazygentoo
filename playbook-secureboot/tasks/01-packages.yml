@@ -1,0 +1,20 @@
+---
+###############################
+# install secure boot toolchain #
+###############################
+
+- name: install eselect-repository
+  command: emerge --quiet-build --noreplace app-eselect/eselect-repository
+
+- name: check if guru is enabled
+  shell: eselect repository list -i | grep -q guru
+  register: guru_check
+  failed_when: false
+  changed_when: false
+
+- name: sync guru
+  shell: eselect repository enable guru && emaint sync -r guru
+  when: guru_check.rc != 0
+
+- name: install sbctl
+  command: emerge --quiet-build --noreplace app-crypt/sbctl

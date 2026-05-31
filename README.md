@@ -11,8 +11,8 @@ This project has three independent playbooks, run in order, each against a remot
 - playbook-desktop
   - Run cmd: `ansible-playbook desktop.yml`
   - Run after having installed the base playbook
-- playbook-kernel
-  - Run cmd: `ansible-playbook kernel.yml`
+- playbook-secureboot
+  - Run cmd: `ansible-playbook secureboot.yml`
   - Run with computer in setup mode and with boot keys deleted
 
 
@@ -23,6 +23,7 @@ Runs a gentoo install, without systemd and openrc and instead uses runit a more 
 Also provides seatd as a session manager instead of elogind or logind.
 Provides options for single or dual boot, LUKS encryption or plain text, and for a choice of networking daemon.
 Autodetects cpu,gpu and sets up the needed gpu,cpu flags.
+Boots a UKI from the binary kernel registered with efibootmgr (no bootloader, no grub).
 Will prompt for the LUKS password
 ## playbook-desktop
 **sets up a full GUI with apps and services**
@@ -36,13 +37,12 @@ installs a full desktop environment including:
 - installs nix + home-manger
 - base needed apps
 - firewall
-## playbook-kernel
-**Assembles a UKI and Signs it and boots without a bootloader**
+## playbook-secureboot
+**Enrolls Secure Boot keys and signs the UKI**
 
-Makes a UKI from the binary kernel (not gunna compile a kernel for 1-3% better performance).
-signs the UKI so its secureboot ready.
-Changes boot order via efibootmgr.
-Deletes grub since bios boots right off the UKI.
+Generates and enrolls sbctl keys (keeps Microsoft's keys via -m for dual boot).
+Wires ukify signing into kernel-install so future kernels sign on rebuild.
+Re-signs the current UKI so it boots with Secure Boot enabled.
 
 
 # Requirements

@@ -1,0 +1,12 @@
+---
+#########################################
+# checks: gentoo, UEFI, efivarfs mounted #
+#########################################
+
+- name: check its gentoo, UEFI, efivarfs mounted
+  shell: |
+    set -e
+    [ -f /etc/gentoo-release ] || { echo "not Gentoo"; exit 1; }
+    [ -d /sys/firmware/efi ]   || { echo "not UEFI-booted"; exit 1; }
+    mountpoint -q /sys/firmware/efi/efivars
+  changed_when: false

@@ -9,7 +9,7 @@
 # from kernel-install(8) env. Matches efibootmgr entries by UKI
 # filename (unique per KVER) rather than label.
 #
-# Managed by playbook-kernel/tasks/03-installkernel-hooks.yml.
+# Managed by playbook-base/tasks/06-kernel.yml.
 
 set -e
 

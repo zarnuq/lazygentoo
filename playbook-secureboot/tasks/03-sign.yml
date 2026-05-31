@@ -1,0 +1,19 @@
+---
+########################################################
+# wire ukify signing into kernel-install, re-sign current UKI #
+########################################################
+
+- name: add Secure Boot signing keys to /etc/kernel/uki.conf
+  blockinfile:
+    path: /etc/kernel/uki.conf
+    insertafter: '^\[UKI\]'
+    marker: "# {mark} playbook-secureboot signing"
+    block: |
+      SecureBootPrivateKey={{ sb_db_key }}
+      SecureBootCertificate={{ sb_db_cert }}
+
+- name: rebuild + sign the current UKI
+  shell: |
+    set -e
+    kver=$(ls /lib/modules | sort -V | tail -n1)
+    kernel-install add "$kver" "/boot/vmlinuz-$kver"

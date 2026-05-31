@@ -1,29 +1,35 @@
 ---
 ############################################
-# install bin kernel, cmdline, initramfs, and microcodes
+# install bin kernel + initramfs, build a UKI, register it with efibootmgr, and microcodes
 ############################################
-- name: check /etc/kernel exists in chroot
+- name: check UEFI
+  stat:
+    path: /sys/firmware/efi
+  register: efi_present
+
+- name: fail if not UEFI
+  fail:
+  when: not efi_present.stat.exists
+
+- name: create /etc/kernel/install.d + /etc/dracut.conf.d in chroot
   file:
-    path: "{{ chroot_dir }}/etc/kernel"
- 
+    path: "{{ chroot_dir }}{{ item }}"
+    state: directory
     mode: "0755"
+  loop:
+    - /etc/kernel/install.d
+    - /etc/dracut.conf.d
 
 - name: make root kernel cmdline
   set_fact:
     root_cmdline: >-
-      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype=ext4 rw quiet loglevel=3
+      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype=ext4 rw quiet loglevel=3 init=/usr/bin/runit-init
 
 - name: write kernel cmdline
   copy:
     dest: "{{ chroot_dir }}/etc/kernel/cmdline"
     mode: "0644"
     content: "{{ root_cmdline | trim }}\n"
-
-- name: check /etc/dracut.conf.d exists in chroot
-  file:
-    path: "{{ chroot_dir }}/etc/dracut.conf.d"
-    state: directory
-    mode: "0755"
 
 - name: write dracut cmdline
   copy:
@@ -51,13 +57,45 @@
     "emerge --quiet-build sys-fs/cryptsetup"
   when: fde_enable
 
-- name: install firmware, binary kernel, installkernel
+- name: install firmware, UKI toolchain, installkernel
   command: >
     chroot {{ chroot_dir }} /bin/bash -lc
-    "emerge --quiet-build sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/gentoo-kernel-bin"
-  async: 7200
+    "emerge --quiet-build --newuse sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/dracut sys-apps/systemd-utils sys-boot/efibootmgr"
+  async: 3600
   poll: 30
 
 - name: install intel microcode
   command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-firmware/intel-microcode"
   when: cpu_microcode == "intel"
+
+- name: install binary kernel
+  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-kernel/gentoo-kernel-bin"
+  async: 7200
+  poll: 30
+
+- name: write kernel-install / UKI config
+  copy:
+    dest: "{{ chroot_dir }}/etc/kernel/{{ item.f }}"
+    mode: "0644"
+    content: "{{ item.c }}"
+  loop:
+    - { f: install.conf, c: "layout=uki\ninitrd_generator=dracut\nuki_generator=ukify\n" }
+    - { f: uki.conf,     c: "[UKI]\nCmdline=@/etc/kernel/cmdline\nOSRelease=@/etc/os-release\n" }
+    - { f: entry-token,  c: "gentoo\n" }
+    - { f: uki.env,      c: "LABEL_PREFIX=\"{{ uki_label_prefix }}\"\nKEEP_N_KERNELS={{ keep_n_kernels }}\nPROMOTE_NEW_TO_DEFAULT={{ 'true' if promote_new_to_default else 'false' }}\n" }
+  loop_control:
+    label: "{{ item.f }}"
+
+- name: install kernel-install hook scripts
+  copy:
+    src: "hooks/{{ item }}"
+    dest: "{{ chroot_dir }}/etc/kernel/install.d/{{ item }}"
+    mode: "0755"
+  loop:
+    - 95-efibootmgr-register.install
+    - 96-prune-old-ukis.install
+
+- name: build + register UKI (kernel-install)
+  command: >
+    chroot {{ chroot_dir }} /bin/bash -lc
+    "kver=$(ls /lib/modules | sort -V | tail -n1); kernel-install add \"$kver\" \"/boot/vmlinuz-$kver\""
