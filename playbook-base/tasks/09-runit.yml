@@ -4,13 +4,13 @@
 #############################################
 - name: install runit + udevd
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "emerge --quiet-build --noreplace sys-process/runit sys-apps/systemd-utils"
   async: 1800
   poll: 30
 
 - name: remove sysvinit
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build -C sys-apps/sysvinit"
+  command: '{{ in_chroot }} "emerge --quiet-build -C sys-apps/sysvinit"'
   failed_when: false
 
 - name: mask sys-apps/sysvinit

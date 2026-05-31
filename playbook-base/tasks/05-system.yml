@@ -19,11 +19,9 @@
       {% endfor %}
 
 - name: generate locales
-  command: chroot {{ chroot_dir }} /bin/bash -lc "locale-gen"
-
+  command: '{{ in_chroot }} "locale-gen"'
 - name: set locale
-  command: chroot {{ chroot_dir }} /bin/bash -lc "eselect locale set {{ default_locale }}"
-
+  command: '{{ in_chroot }} "eselect locale set {{ default_locale }}"'
 - name: set keymap
   lineinfile:
     path: "{{ chroot_dir }}/etc/conf.d/keymaps"
@@ -74,6 +72,6 @@
 #########################################
 - name: set root password
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "echo 'root:{{ root_password }}' | chpasswd"
   no_log: true

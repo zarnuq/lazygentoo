@@ -23,7 +23,7 @@
 - name: make root kernel cmdline
   set_fact:
     root_cmdline: >-
-      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype=ext4 rw quiet loglevel=3 init=/usr/bin/runit-init
+      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype={{ root_fs }} rw quiet loglevel=3 init=/usr/bin/runit-init
 
 - name: write kernel cmdline
   copy:
@@ -53,23 +53,23 @@
 
 - name: install cryptsetup ahead of kernel build (FDE only)
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "emerge --quiet-build sys-fs/cryptsetup"
   when: fde_enable
 
 - name: install firmware, UKI toolchain, installkernel
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "emerge --quiet-build --newuse sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/dracut sys-apps/systemd-utils sys-boot/efibootmgr"
   async: 3600
   poll: 30
 
 - name: install intel microcode
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-firmware/intel-microcode"
+  command: '{{ in_chroot }} "emerge --quiet-build sys-firmware/intel-microcode"'
   when: cpu_microcode == "intel"
 
 - name: install binary kernel
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build sys-kernel/gentoo-kernel-bin"
+  command: '{{ in_chroot }} "emerge --quiet-build sys-kernel/gentoo-kernel-bin"'
   async: 7200
   poll: 30
 
@@ -97,5 +97,5 @@
 
 - name: build + register UKI (kernel-install)
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "kver=$(ls /lib/modules | sort -V | tail -n1); kernel-install add \"$kver\" \"/boot/vmlinuz-$kver\""

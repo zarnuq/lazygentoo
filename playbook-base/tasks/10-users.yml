@@ -1,52 +1,51 @@
 ---
 #############################################
-# user creation, add auth_keys file, add to wheel, 
+# user creation, add auth_keys file, add to wheel,
 #############################################
-- name: create user
-  command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
-    "id {{ user_name }} >/dev/null 2>&1 ||
-     useradd -m -G {{ user_groups | join(',') }} -s {{ user_shell }} {{ user_name }}"
+- name: create and configure user (create_user=true)
   when: create_user
-
-- name: set user password
-  command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
-    "echo '{{ user_name }}:{{ user_password }}' | chpasswd"
-  when: create_user
-  no_log: true
-
-- name: ensure /etc/sudoers.d exists
-  file:
-    path: "{{ chroot_dir }}/etc/sudoers.d"
-    state: directory
-    mode: "0750"
-    owner: root
-    group: root
-  when: create_user
-
-- name: allow wheel group to use sudo
-  copy:
-    dest: "{{ chroot_dir }}/etc/sudoers.d/wheel"
-    mode: "0440"
-    content: |
-      %wheel ALL=(ALL:ALL) ALL
-  when: create_user
-
-- name: move authorized_keys for user
   block:
-    - name: Make ~/.ssh
-      file:
-        path: "{{ chroot_dir }}/home/{{ user_name }}/.ssh"
-        state: directory
-        mode: "0700"
-    - name: write authorized_keys
-      copy:
-        dest: "{{ chroot_dir }}/home/{{ user_name }}/.ssh/authorized_keys"
-        mode: "0600"
-        content: "{{ ssh_authorized_keys | join('\n') }}\n"
-    - name: chown user ssh dir
+    - name: create user
       command: >
-        chroot {{ chroot_dir }} /bin/bash -lc
-        "chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh"
-  when: create_user and (ssh_authorized_keys | length > 0)
+        {{ in_chroot }}
+        "id {{ user_name }} >/dev/null 2>&1 ||
+         useradd -m -G {{ user_groups | join(',') }} -s {{ user_shell }} {{ user_name }}"
+
+    - name: set user password
+      command: >
+        {{ in_chroot }}
+        "echo '{{ user_name }}:{{ user_password }}' | chpasswd"
+      no_log: true
+
+    - name: ensure /etc/sudoers.d exists
+      file:
+        path: "{{ chroot_dir }}/etc/sudoers.d"
+        state: directory
+        mode: "0750"
+        owner: root
+        group: root
+
+    - name: allow wheel group to use sudo
+      copy:
+        dest: "{{ chroot_dir }}/etc/sudoers.d/wheel"
+        mode: "0440"
+        content: |
+          %wheel ALL=(ALL:ALL) ALL
+
+    - name: move authorized_keys for user
+      when: ssh_authorized_keys | length > 0
+      block:
+        - name: Make ~/.ssh
+          file:
+            path: "{{ chroot_dir }}/home/{{ user_name }}/.ssh"
+            state: directory
+            mode: "0700"
+        - name: write authorized_keys
+          copy:
+            dest: "{{ chroot_dir }}/home/{{ user_name }}/.ssh/authorized_keys"
+            mode: "0600"
+            content: "{{ ssh_authorized_keys | join('\n') }}\n"
+        - name: chown user ssh dir
+          command: >
+            {{ in_chroot }}
+            "chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh"

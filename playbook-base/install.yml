@@ -15,12 +15,16 @@
 
   vars:
     chroot_dir: /mnt/gentoo
+    in_chroot: 'chroot {{ chroot_dir }} /bin/bash -lc'
     part_suffix: "{{ 'p' if target_disk is match('.*[0-9]$') else '' }}"
     efi_part:  "{{ efi_part_override  | default('') or (target_disk ~ part_suffix ~ '1') }}"
     swap_part: "{{ swap_part_override | default('') or (target_disk ~ part_suffix ~ '2') }}"
     root_part: "{{ root_part_override | default('') or (target_disk ~ part_suffix ~ ('3' if swap_size_mib | int > 0 else '2')) }}"
     mapper_root: "/dev/mapper/{{ luks_name }}"
     root_device: "{{ mapper_root if fde_enable else root_part }}"
+    root_fs: "ext4"
+    have_swap:  "{{ swap_size_mib | int > 0 }}"
+    plain_swap: "{{ (swap_size_mib | int > 0) and not (fde_enable | bool and encrypt_swap | bool) }}"
     esp_mountpoint: "/boot"
     makeopts_effective: "-j{{ makeopts_jobs if makeopts_jobs | int > 0 else ansible_processor_vcpus }}"
     emerge_jobs_effective: "{{ emerge_jobs if emerge_jobs | int > 0 else ((ansible_processor_vcpus | int + 1) // 2) }}"
@@ -36,4 +40,5 @@
     - import_tasks: tasks/08-base-pkgs.yml
     - import_tasks: tasks/09-runit.yml
     - import_tasks: tasks/10-users.yml
+    - import_tasks: tasks/11-acpid.yml
     - import_tasks: tasks/99-finish.yml

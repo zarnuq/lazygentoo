@@ -30,22 +30,22 @@
     mode: "0644"
 
 - name: pull initial portage tree
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge-webrsync"
+  command: '{{ in_chroot }} "emerge-webrsync"'
   args:
     creates: "{{ chroot_dir }}/var/db/repos/gentoo/profiles/repo_name"
 
 - name: select profile
-  command: chroot {{ chroot_dir }} /bin/bash -lc "eselect profile set {{ gentoo_profile }}"
+  command: '{{ in_chroot }} "eselect profile set {{ gentoo_profile }}"'
   register: profile_set
   changed_when: "'now set' in profile_set.stdout or 'set to' in profile_set.stdout"
 
 - name: install cpuid2cpuflags (for accurate CPU_FLAGS_X86)
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build app-portage/cpuid2cpuflags"
+  command: '{{ in_chroot }} "emerge --quiet-build app-portage/cpuid2cpuflags"'
   args:
     creates: "{{ chroot_dir }}/usr/bin/cpuid2cpuflags"
 
 - name: detect CPU flags
-  command: chroot {{ chroot_dir }} /bin/bash -lc "cpuid2cpuflags"
+  command: '{{ in_chroot }} "cpuid2cpuflags"'
   register: cpuid_out
   changed_when: false
 
@@ -66,6 +66,6 @@
 # world update with new compiler flags
 #########################################
 - name: update @world to use new profile/USE flags
-  command: chroot {{ chroot_dir }} /bin/bash -lc "emerge --quiet-build --update --deep --newuse --with-bdeps=y @world"
+  command: '{{ in_chroot }} "emerge --quiet-build --update --deep --newuse --with-bdeps=y @world"'
   async: 14400
   poll: 30

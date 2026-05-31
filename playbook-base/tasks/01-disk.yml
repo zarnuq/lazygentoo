@@ -20,10 +20,6 @@
     - name: wipe filesystem signatures
       command: "wipefs --all --force {{ target_disk }}"
 
-    - name: settle udev
-      command: udevadm settle
-      changed_when: false
-
     - name: create new GPT label
       command: "parted -s {{ target_disk }} mklabel gpt"
 
@@ -60,22 +56,18 @@
 #################################
 - name: wipe per-partition signatures
   command: "wipefs --all --force {{ item }}"
-  loop: "{{ [efi_part, root_part] + ([swap_part] if swap_size_mib | int > 0 else []) }}"
+  loop: "{{ [efi_part, root_part] + ([swap_part] if have_swap | bool else []) }}"
 
 - name: format EFI partition
   command: "mkfs.vfat -F32 -n EFI {{ efi_part }}"
 
 - name: format swap partition (encrypt_swap=false)
   command: "mkswap -L swap {{ swap_part }}"
-  when:
-    - swap_size_mib | int > 0
-    - not ((fde_enable | bool) and (encrypt_swap | bool))
+  when: plain_swap | bool
 
 - name: enable swap
   command: "swapon {{ swap_part }}"
-  when:
-    - swap_size_mib | int > 0
-    - not ((fde_enable | bool) and (encrypt_swap | bool))
+  when: plain_swap | bool
   changed_when: false
 
 #################################
@@ -111,31 +103,19 @@
   no_log: true
 
 - name: format root on mapper if FDE else raw partition
-  command: "mkfs.ext4 -F -L gentoo {{ root_device }}"
-
-- name: make Gentoo mountpoint
-  file:
-    path: "{{ chroot_dir }}"
-    state: directory
-    mode: "0755"
+  command: "mkfs.{{ root_fs }} -F -L gentoo {{ root_device }}"
 
 - name: mount root
   ansible.posix.mount:
     path: "{{ chroot_dir }}"
     src: "{{ root_device }}"
-    fstype: ext4
+    fstype: "{{ root_fs }}"
     opts: "noatime"
     state: mounted
 
 #################################
 # mount boot make boot filesystem
 #################################
-- name: make /boot mountpoint
-  file:
-    path: "{{ chroot_dir }}/boot"
-    state: directory
-    mode: "0755"
-
 - name: mount /boot
   ansible.posix.mount:
     path: "{{ chroot_dir }}/boot"
@@ -162,13 +142,11 @@
   command: "blkid -s UUID -o value {{ swap_part }}"
   register: swap_uuid_result
   changed_when: false
-  when:
-    - swap_size_mib | int > 0
-    - not ((fde_enable | bool) and (encrypt_swap | bool))
+  when: plain_swap | bool
 
 - name: save UUIDs
   set_fact:
     efi_uuid:  "{{ uuid_results.results[0].stdout | trim }}"
     root_uuid: "{{ uuid_results.results[1].stdout | trim }}"
     luks_uuid: "{{ (luks_uuid_result.stdout | default('') | trim) if (fde_enable | bool) else '' }}"
-    swap_uuid: "{{ (swap_uuid_result.stdout | default('') | trim) if (swap_size_mib | int > 0 and not ((fde_enable | bool) and (encrypt_swap | bool))) else '' }}"
+    swap_uuid: "{{ (swap_uuid_result.stdout | default('') | trim) if (plain_swap | bool) else '' }}"

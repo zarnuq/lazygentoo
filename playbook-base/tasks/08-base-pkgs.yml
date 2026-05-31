@@ -4,14 +4,14 @@
 #####################################################
 - name: install base packages
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "emerge --quiet-build --noreplace {{ base_packages | join(' ') }}"
   async: 14400
   poll: 30
 
 - name: install network daemon ({{ network_stack }})
   command: >
-    chroot {{ chroot_dir }} /bin/bash -lc
+    {{ in_chroot }}
     "emerge --quiet-build --noreplace net-misc/{{ 'networkmanager' if network_stack == 'networkmanager' else 'dhcpcd' }}"
 
 - name: disable polkit in NetworkManager
