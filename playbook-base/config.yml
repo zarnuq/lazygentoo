@@ -28,7 +28,7 @@ root_part_override: "/dev/nvme0n1p6"    # Linux root (ext4)
 # ENCRYPTION OPTIONS #
 ######################
 
-fde_enable: false
+fde_enable: true
 luks_name: "cryptroot"
 luks_cipher: "aes-xts-plain64"
 luks_key_size: 512
@@ -133,6 +133,13 @@ use_flags:
   - "-spell"                 # drop hunspell/enchant linkage in apps
   - "-gdbm"                  # GNU dbm linkage; nothing in this set uses it
   - "-jpegxl"                # JPEG XL image format — niche, slow build
+  - "-nls"                   # English-only; drop gettext translation catalogs
+  - "-kde"                   # no KDE integration
+  - "-plasma"                # no Plasma desktop
+  - "-telemetry"             # no opt-in telemetry where offered
+  - "-ldap"                  # no LDAP auth
+  - "-kerberos"              # no Kerberos/GSSAPI auth
+  - "-zeroconf"              # no mDNS/avahi discovery (pairs with -cups)
 
 ###################
 # SERVICE OPTIONS #
