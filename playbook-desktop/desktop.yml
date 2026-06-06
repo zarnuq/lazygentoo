@@ -24,3 +24,4 @@
     - import_tasks: tasks/06-shell.yml
     - import_tasks: tasks/07-nix.yml
     - import_tasks: tasks/08-firewall.yml
+    - import_tasks: tasks/09-power.yml

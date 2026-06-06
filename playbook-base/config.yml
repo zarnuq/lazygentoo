@@ -167,7 +167,6 @@ base_packages:
   - sys-kernel/gentoo-kernel-bin # prebuilt distribution kernel
 
   # init / core
-  - sys-process/cronie           # cron daemon
   - app-admin/sysklogd           # syslog daemon
 
   # network + ntp

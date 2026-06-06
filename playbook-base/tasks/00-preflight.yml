@@ -55,19 +55,6 @@
   when: video_cards | trim == ""
 
 #################################
-# Detect laptop by presence of an ACPI lid switch (drives acpid lid-suspend)
-#################################
-- name: probe for ACPI lid switch
-  shell: "ls /proc/acpi/button/lid/*/state 2>/dev/null | head -1"
-  register: lid_state
-  changed_when: false
-  failed_when: false
-
-- name: set is_laptop fact
-  set_fact:
-    is_laptop: "{{ lid_state.stdout | trim | length > 0 }}"
-
-#################################
 # checks that every partition is named specifically before wiping partitions
 #################################
 - name: Validate dual-boot overrides are set when dual_boot=true

@@ -51,11 +51,7 @@
             "chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh"
 
 #############################################
-# make `sudo` an alias for doas (PATH symlink)
-# /usr/local/bin precedes /usr/bin in PATH, so `sudo <cmd>` resolves here and
-# execs doas. Works in every shell + scripts (unlike a shell alias). doas ignores
-# argv[0], so `sudo emerge -uDN` == `doas emerge -uDN`. Breaks only on sudo-only
-# flags (-i/-E/-H/...); swap this for a wrapper script if you need those.
+# make sudo an alias for doas via symlink
 #############################################
 - name: ensure /usr/local/bin exists
   file:

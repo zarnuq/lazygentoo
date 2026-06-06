@@ -1,0 +1,87 @@
+---
+##############################################################################
+# laptop power tuning: acpid lid-suspend + TLP (both Intel & AMD) + thermald on
+# Intel, plus the swayidle package for idle-lock (you wire it into your dwl
+# autostart yourself). package lists + services to enable come from config.yml
+# (power_packages[_intel] / power_services[_intel]). desktop is its own play, so
+# re-probe for a laptop here -- base's is_laptop fact doesn't carry across runs.
+##############################################################################
+- name: probe for ACPI lid switch (laptop detection)
+  shell: "ls /proc/acpi/button/lid/*/state 2>/dev/null | head -1"
+  register: lid_state
+  changed_when: false
+  failed_when: false
+
+- name: set is_laptop fact
+  set_fact:
+    is_laptop: "{{ lid_state.stdout | trim | length > 0 }}"
+
+- name: laptop power tuning + idle-lock tooling
+  when: is_laptop | bool
+  block:
+    - name: probe cpu vendor (thermald is Intel-only; TLP covers both vendors)
+      shell: "grep -m1 vendor_id /proc/cpuinfo | awk '{print $3}'"
+      register: cpu_vendor
+      changed_when: false
+      failed_when: false
+
+    - name: set cpu_is_intel fact
+      set_fact:
+        cpu_is_intel: "{{ cpu_vendor.stdout | trim == 'GenuineIntel' }}"
+
+    - name: compute effective power package + service lists
+      set_fact:
+        power_packages_eff: "{{ power_packages + (power_packages_intel if cpu_is_intel else []) }}"
+        power_services_eff: "{{ power_services + (power_services_intel if cpu_is_intel else []) }}"
+
+    - name: install power packages (+ Intel-only on Intel)
+      command: >
+        emerge --quiet-build --noreplace
+        --autounmask=y --autounmask-write=y --autounmask-continue=y --autounmask-license=y
+        {{ power_packages_eff | join(' ') }}
+      async: 3600
+      poll: 30
+
+    #########################################
+    # runit service definitions (acpid/tlp/thermald all ship in this playbook's
+    # files/runit/sv) -> copy the ones we're about to enable into /etc/sv.
+    #########################################
+    - name: ship power runit service definitions to /etc/sv
+      copy:
+        src: "runit/sv/{{ item }}/"
+        dest: "/etc/sv/{{ item }}/"
+        mode: "0755"
+      loop: "{{ power_services_eff }}"
+
+    #########################################
+    # acpid config: suspend on lid close (runit+seatd has no logind to do it).
+    # acpid reads /etc/acpi/events only at startup.
+    #########################################
+    - name: acpid lid event
+      copy:
+        dest: /etc/acpi/events/lid
+        mode: "0644"
+        content: |
+          event=button/lid.*
+          action=/etc/acpi/lid.sh
+
+    - name: acpid lid action -- suspend to RAM when lid reads closed
+      copy:
+        dest: /etc/acpi/lid.sh
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # bare kernel suspend, no screen lock; add a locker above this line if wanted.
+          # lid node name (e.g. LID0) varies by hardware -- glob covers it.
+          grep -q closed /proc/acpi/button/lid/*/state && echo mem > /sys/power/state
+
+    #########################################
+    # enable services (live runsvdir picks these up immediately)
+    #########################################
+    - name: enable power runit services
+      file:
+        src: "/etc/sv/{{ item }}"
+        dest: "/etc/service/{{ item }}"
+        state: link
+        force: yes
+      loop: "{{ power_services_eff }}"

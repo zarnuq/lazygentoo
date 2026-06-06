@@ -42,5 +42,4 @@
     - import_tasks: tasks/08-base-pkgs.yml
     - import_tasks: tasks/09-runit.yml
     - import_tasks: tasks/10-users.yml
-    - import_tasks: tasks/11-acpid.yml
     - import_tasks: tasks/99-finish.yml

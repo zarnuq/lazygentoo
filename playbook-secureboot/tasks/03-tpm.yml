@@ -84,15 +84,6 @@
         clevis luks bind -y -d {{ luks_dev }} -k -
         tpm2 '{"pcr_bank":"{{ tpm_pcr_bank }}","pcr_ids":"{{ tpm_pcr_ids }}"}'
       no_log: true
-
-    # The bind above only writes a keyslot + token into the LUKS header; it does
-    # NOT touch the initramfs. Rebuild + re-sign the UKI now, AFTER the binding
-    # exists, so the clevis dracut module (forced in via 01-packages) is baked
-    # into the signed boot image and can actually unseal the TPM at next boot.
-    # uki.conf already carries the SB signing keys (added in 04-sign), so this
-    # one step both includes clevis and signs the result.
-    - name: rebuild + re-sign the UKI so the clevis module is baked into the signed boot image
-      shell: |
-        set -e
-        kver=$(ls /lib/modules | sort -V | tail -n1)
-        kernel-install add "$kver" "/boot/vmlinuz-$kver"
+      # No UKI rebuild needed here: the clevis token lives in the LUKS header
+      # (read at boot), not the initramfs, and 04-sign already built a signed,
+      # clevis-capable UKI before the reboot. Re-signing now would be a no-op.

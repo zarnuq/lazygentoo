@@ -143,6 +143,23 @@ ufw_allowed_tcp_ports:
   - 22
 ufw_allowed_udp_ports: []
 
+# laptop power tuning (tasks/09-power.yml; applied only when an ACPI lid switch
+# is detected). TLP covers both Intel and AMD; thermald is Intel-only, so it
+# lives in the *_intel lists and is added only when the CPU is Intel.
+# runit run scripts for all three ship in files/runit/sv/ here.
+power_packages:
+  - sys-power/acpid       # ACPI events -> lid-close suspend
+  - sys-power/tlp         # CPU/PCIe/USB power tuning (intel_pstate + amd_pstate)
+  - gui-apps/swayidle     # idle hook -> swaylock (wire into your dwl autostart)
+power_packages_intel:
+  - sys-power/thermald    # Intel-only thermal daemon
+
+power_services:
+  - acpid
+  - tlp
+power_services_intel:
+  - thermald
+
 # theme fetch versions and names
 theme_assets:
   jetbrains_mono_version: "2.304"

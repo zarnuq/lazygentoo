@@ -42,8 +42,9 @@
 # box always falls through to the passphrase prompt. We add it EXPLICITLY rather
 # than rely on dracut's hostonly autodetect (which only includes clevis if a
 # binding already exists at UKI-build time -- false on a fresh install, since the
-# bind happens later in 03-tpm.yml). The UKI is rebuilt to pick this up in 04-sign
-# (pre-reboot) and again after the bind in 03-tpm (the authoritative, signed one).
+# bind happens later in 03-tpm.yml). 04-sign rebuilds the UKI with this module in
+# (pre-reboot) and every future kernel-install keeps it -- the TPM binding lives
+# in the LUKS header (read at boot), not the initramfs, so no post-bind rebuild.
 - name: force the clevis dracut module into the UKI (tpm_unlock=true)
   copy:
     dest: /etc/dracut.conf.d/clevis.conf
