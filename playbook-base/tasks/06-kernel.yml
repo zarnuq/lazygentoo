@@ -37,11 +37,25 @@
     mode: "0644"
     content: "kernel_cmdline=\"{{ root_cmdline | trim }}\"\n"
 
-- name: write dracut firmware/early-microcode/i18n config
+- name: write dracut firmware/early-microcode config
   template:
     src: dracut-firmware.conf.j2
     dest: "{{ chroot_dir }}/etc/dracut.conf.d/firmware.conf"
     mode: "0644"
+
+- name: write dracut lean config (hostonly + zstd + omit unused modules; runit, no systemd/network)
+  copy:
+    dest: "{{ chroot_dir }}/etc/dracut.conf.d/00-lean.conf"
+    mode: "0644"
+    content: |
+      hostonly="yes"
+      compress="zstd"
+      # safety net so a chroot-built hostonly initramfs can always mount root:
+      # force the root fs module + disk controller driver (often missed when the
+      # livecd kernel has them builtin but gentoo-kernel-bin builds them modular).
+      filesystems+=" {{ root_fs }} "
+      force_drivers+=" {{ root_disk_driver }} "
+      omit_dracutmodules+=" systemd systemd-initrd dracut-systemd systemd-ask-password network network-manager ifcfg plymouth lvm mdraid dmraid multipath nfs iscsi nbd i18n "
 
 - name: write dracut crypt config (fde_enable=true)
   copy:

@@ -1,11 +1,4 @@
 early_microcode=yes
-omit_dracutmodules+=" i18n "
-{% if 'amdgpu' in video_cards %}
-install_items+=" /lib/firmware/amdgpu/* "
-{% endif %}
-{% if 'i915' in video_cards or 'intel' in video_cards %}
-install_optional_items+=" /lib/firmware/i915/* "
-{% endif %}
-{% if 'nouveau' in video_cards %}
-install_optional_items+=" /lib/firmware/nouveau/* "
-{% endif %}
+# GPU firmware is intentionally NOT bundled: no early KMS / plymouth here
+# (plain-text LUKS prompt on the EFI framebuffer), so the GPU driver loads
+# its firmware from the real rootfs after switch_root. Keeps the UKI lean.

@@ -17,12 +17,14 @@
     chroot_dir: /mnt/gentoo
     in_chroot: 'chroot {{ chroot_dir }} /bin/bash -lc'
     part_suffix: "{{ 'p' if target_disk is match('.*[0-9]$') else '' }}"
-    efi_part:  "{{ efi_part_override  | default('') or (target_disk ~ part_suffix ~ '1') }}"
-    swap_part: "{{ swap_part_override | default('') or (target_disk ~ part_suffix ~ '2') }}"
-    root_part: "{{ root_part_override | default('') or (target_disk ~ part_suffix ~ ('3' if swap_size_mib | int > 0 else '2')) }}"
+    efi_part:  "{{ efi_part_override  if (dual_boot | bool) else (target_disk ~ part_suffix ~ '1') }}"
+    swap_part: "{{ swap_part_override if (dual_boot | bool) else (target_disk ~ part_suffix ~ '2') }}"
+    root_part: "{{ root_part_override if (dual_boot | bool) else (target_disk ~ part_suffix ~ ('3' if swap_size_mib | int > 0 else '2')) }}"
     mapper_root: "/dev/mapper/{{ luks_name }}"
     root_device: "{{ mapper_root if fde_enable else root_part }}"
     root_fs: "ext4"
+    # dracut hostonly safety net: force-include the root disk's controller driver
+    root_disk_driver: "{{ 'nvme' if 'nvme' in target_disk else 'virtio_blk virtio_pci' if 'vd' in target_disk else 'sdhci_pci mmc_block' if 'mmcblk' in target_disk else 'ahci sd_mod ata_piix' }}"
     have_swap:  "{{ swap_size_mib | int > 0 }}"
     plain_swap: "{{ (swap_size_mib | int > 0) and not (fde_enable | bool and encrypt_swap | bool) }}"
     esp_mountpoint: "/boot"

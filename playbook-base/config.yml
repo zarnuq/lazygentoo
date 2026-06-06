@@ -10,14 +10,14 @@ target_disk: "/dev/nvme0n1"
 
 # Partition sizes in MB (for single boot)
 efi_size_mib: 1028       # EFI System Partition /boot
-swap_size_mib: 4096      # set to 0 to skip swap
+swap_size_mib: 8192      # set to 0 to skip swap
 
 #############
 # DUAL BOOT #
 #############
 
 # Option for dual boot (must have partitions made already!)
-dual_boot: true
+dual_boot: false 
 
 # Partitions that will be written to (for dual boot only)
 efi_part_override:  "/dev/nvme0n1p4"    # Linux's ESP (FAT32, mounted at /boot)
@@ -73,8 +73,8 @@ user_groups:
   - plugdev
   - seat
 user_shell: "/bin/bash"
-ssh_authorized_keys: 
-    - ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA me@gentoo
+# SSH public keys: drop them in files/authorized_keys (gitignored, one key per
+# line). See files/authorized_keys.example. Install skips it if the file is absent.
 
 #########################
 # STAGE3 SOURCE/PROFILE #
@@ -96,7 +96,6 @@ gentoo_profile: "default/linux/amd64/23.0/desktop"
 common_flags: "-march=native -O2 -pipe"
 makeopts_jobs: 0          # 0 = auto (use detected vCPUs)
 emerge_jobs: 0            # 0 = ceil(vCPUs/2)
-portage_tmpfs: true       # false = use disk (/var/tmp)
 accept_keywords: "amd64"  # use "~amd64" for testing branch
 accept_license: "*"
 

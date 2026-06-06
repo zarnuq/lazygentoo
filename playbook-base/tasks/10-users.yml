@@ -25,8 +25,15 @@
         group: root
         mode: "0400"
 
+    - name: check for an authorized_keys file (files/authorized_keys, gitignored)
+      stat:
+        path: "{{ playbook_dir }}/files/authorized_keys"
+      delegate_to: localhost
+      become: no
+      register: authkeys_file
+
     - name: move authorized_keys for user
-      when: ssh_authorized_keys | length > 0
+      when: authkeys_file.stat.exists
       block:
         - name: Make ~/.ssh
           file:
@@ -35,10 +42,30 @@
             mode: "0700"
         - name: write authorized_keys
           copy:
+            src: authorized_keys
             dest: "{{ chroot_dir }}/home/{{ user_name }}/.ssh/authorized_keys"
             mode: "0600"
-            content: "{{ ssh_authorized_keys | join('\n') }}\n"
         - name: chown user ssh dir
           command: >
             {{ in_chroot }}
             "chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh"
+
+#############################################
+# make `sudo` an alias for doas (PATH symlink)
+# /usr/local/bin precedes /usr/bin in PATH, so `sudo <cmd>` resolves here and
+# execs doas. Works in every shell + scripts (unlike a shell alias). doas ignores
+# argv[0], so `sudo emerge -uDN` == `doas emerge -uDN`. Breaks only on sudo-only
+# flags (-i/-E/-H/...); swap this for a wrapper script if you need those.
+#############################################
+- name: ensure /usr/local/bin exists
+  file:
+    path: "{{ chroot_dir }}/usr/local/bin"
+    state: directory
+    mode: "0755"
+
+- name: symlink sudo -> doas so `sudo <cmd>` runs `doas <cmd>`
+  file:
+    src: /usr/bin/doas
+    dest: "{{ chroot_dir }}/usr/local/bin/sudo"
+    state: link
+    force: yes
