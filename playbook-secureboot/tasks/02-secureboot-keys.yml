@@ -3,17 +3,36 @@
 # generate + enroll secure boot keys #
 ######################################
 
-- stat: { path: /usr/share/secureboot/GUID }
-  register: sb_keys
+- name: locate sbctl keys dir (sbctl >=0.11 uses /var/lib/sbctl)
+  shell: |
+    for d in /var/lib/sbctl/keys /usr/share/secureboot/keys; do
+      [ -d "$d" ] && { echo "$d"; exit 0; }
+    done
+    echo /var/lib/sbctl/keys
+  register: sb_keys_dir
+  changed_when: false
 
 - name: generate sbctl keys (first run)
   command: sbctl create-keys
-  when: not sb_keys.stat.exists
+  args:
+    creates: "{{ sb_keys_dir.stdout }}/db/db.key"
+
+- name: set sbctl db key/cert paths for signing
+  set_fact:
+    sb_db_key: "{{ sb_keys_dir.stdout }}/db/db.key"
+    sb_db_cert: "{{ sb_keys_dir.stdout }}/db/db.pem"
 
 - command: sbctl status --json
   register: sb_status
   changed_when: false
 
-- name: enroll keys (need bios to be in setup mode)
-  command: sbctl enroll-keys -m
-  when: '''"setup_mode":true'' in sb_status.stdout'
+- name: enroll keys (skipped if already enrolled; requires firmware setup mode)
+  when: not (sb_status.stdout | from_json).installed
+  block:
+    - name: fail if firmware is not in setup mode
+      assert:
+        that: (sb_status.stdout | from_json).setup_mode | bool
+        fail_msg: "firmware not in Secure Boot setup mode; clear SB keys in BIOS and re-run"
+
+    - name: enroll keys
+      command: sbctl enroll-keys -m

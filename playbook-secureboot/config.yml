@@ -3,6 +3,13 @@
 # gentoo secure boot key enrollment #
 ####################################
 
-# sbctl-generated db key/cert used to sign the UKI built by playbook-base.
-sb_db_key:  "/usr/share/secureboot/keys/db/db.key"
-sb_db_cert: "/usr/share/secureboot/keys/db/db.pem"
+# sbctl-generated db key/cert (sb_db_key/sb_db_cert) used to sign the UKI built
+# by playbook-base are auto-located by 02-secureboot-keys.yml (sbctl moved its
+# data dir from /usr/share/secureboot to /var/lib/sbctl in v0.11).
+
+# TPM2 auto-unlock for LUKS root via clevis (non-systemd). PCR 7 = Secure Boot
+# state: survives kernel updates; only falls back to the passphrase if Secure
+# Boot changes/disables or a firmware update bumps dbx. Passphrase slot kept.
+tpm_unlock: true
+tpm_pcr_bank: "sha256"
+tpm_pcr_ids: "7"

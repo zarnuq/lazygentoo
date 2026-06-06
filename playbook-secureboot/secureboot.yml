@@ -1,9 +1,16 @@
 ---
-#################################################
-# enroll secure boot keys + sign the UKI from base #
-#################################################
+#####################################################################
+# enroll secure boot keys -> sign the UKI -> reboot into the enforcing
+# state -> enroll TPM2 LUKS auto-unlock, all in one run.
+#
+# PCR 7 (Secure Boot state) only reaches its final value after a reboot into
+# the signed/SB-enforcing system, so this playbook reboots the target mid-run
+# before sealing the TPM. On that reboot the box stops at the LUKS passphrase
+# prompt (no TPM binding yet, no SSH in initramfs) -- type your passphrase at
+# the physical console; Ansible reconnects over SSH and finishes. See FIX.md.
+#####################################################################
 
-- name: Enroll Secure Boot keys and sign the UKI
+- name: Enroll Secure Boot keys, sign the UKI, and enroll TPM2 auto-unlock
   hosts: gentoo
   gather_facts: yes
   become: yes
@@ -16,4 +23,25 @@
     - import_tasks: tasks/00-preflight.yml
     - import_tasks: tasks/01-packages.yml
     - import_tasks: tasks/02-secureboot-keys.yml
-    - import_tasks: tasks/03-sign.yml
+    - import_tasks: tasks/04-sign.yml
+
+    #################################################################
+    # bring the machine into its FINAL Secure Boot state before sealing
+    #################################################################
+    - name: check whether Secure Boot is already enforcing
+      command: sbctl status --json
+      register: sb_now
+      changed_when: false
+
+    - name: reboot into the signed/SB-enforcing system so PCR 7 reaches its final value
+      when:
+        - tpm_unlock | bool
+        - not (sb_now.stdout | from_json).secure_boot | bool
+      reboot:
+        msg: "Rebooting to activate Secure Boot before TPM enrollment"
+        reboot_timeout: 900        # leave time to type the LUKS passphrase at the console
+        post_reboot_delay: 5
+        # box halts at the LUKS prompt on this boot (no TPM binding yet); type
+        # the passphrase at the physical console and Ansible reconnects.
+
+    - import_tasks: tasks/03-tpm.yml

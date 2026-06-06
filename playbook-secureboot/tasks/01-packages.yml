@@ -18,3 +18,35 @@
 
 - name: install sbctl
   command: emerge --quiet-build --noreplace app-crypt/sbctl
+
+- name: ensure package.accept_keywords dir
+  file: { path: /etc/portage/package.accept_keywords, state: directory, mode: "0755" }
+  when: tpm_unlock | bool
+
+- name: keyword clevis < 20 (guru masks 20/21 for dracut boot breakage)
+  copy:
+    dest: /etc/portage/package.accept_keywords/clevis
+    mode: "0644"
+    content: "<app-crypt/clevis-20 ~amd64\n"
+  when: tpm_unlock | bool
+
+- name: install clevis + tpm2 tooling (tpm_unlock=true)
+  command: >
+    emerge --quiet-build --noreplace
+    --autounmask --autounmask-keep-keywords=n --autounmask-write --autounmask-continue
+    app-crypt/clevis app-crypt/tpm2-tools app-crypt/tpm2-tss
+  when: tpm_unlock | bool
+
+# Force the clevis dracut module into the initramfs. Without this, the LUKS
+# header's TPM keyslot exists but the boot image has no code to read it, so the
+# box always falls through to the passphrase prompt. We add it EXPLICITLY rather
+# than rely on dracut's hostonly autodetect (which only includes clevis if a
+# binding already exists at UKI-build time -- false on a fresh install, since the
+# bind happens later in 03-tpm.yml). The UKI is rebuilt to pick this up in 04-sign
+# (pre-reboot) and again after the bind in 03-tpm (the authoritative, signed one).
+- name: force the clevis dracut module into the UKI (tpm_unlock=true)
+  copy:
+    dest: /etc/dracut.conf.d/clevis.conf
+    mode: "0644"
+    content: 'add_dracutmodules+=" clevis "'
+  when: tpm_unlock | bool

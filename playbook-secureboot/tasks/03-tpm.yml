@@ -1,0 +1,98 @@
+---
+###########################################################
+# TPM2 auto-unlock for LUKS root via clevis (PCR 7 = Secure Boot state)
+#
+# RUN THIS ONLY AFTER the first successful Secure-Boot-enforcing boot.
+# PCR 7 measures the Secure Boot state, so the LUKS key MUST be sealed while
+# the machine is in its FINAL state (SB on, your keys enrolled, signed UKI).
+# Sealing during the install run binds to a transient pre-enforcement PCR 7
+# that never recurs -> TPM_RC_POLICY_FAIL boot loop. See FIX.md.
+#
+# secureboot.yml reboots the target into the SB-enforcing state immediately
+# before importing this file, so PCR 7 is at its final value when we seal here.
+#
+# Self-healing: any existing tpm2 binding is dropped and re-sealed against the
+# CURRENT PCR 7, so re-running always repairs a stale binding (unlike a plain
+# "skip if a binding exists" guard, which would leave a bad seal in place).
+###########################################################
+- name: configure TPM2 LUKS auto-unlock (tpm_unlock=true)
+  when: tpm_unlock | bool
+  block:
+    - name: ensure clevis + tpm2 tooling are present
+      shell: command -v clevis && command -v tpm2_pcrread
+      changed_when: false
+
+    - name: read current Secure Boot status
+      command: sbctl status --json
+      register: sb_status
+      changed_when: false
+
+    - name: refuse to seal unless Secure Boot is enforcing (seal to the FINAL PCR 7)
+      assert:
+        that: (sb_status.stdout | from_json).secure_boot | bool
+        fail_msg: >-
+          Secure Boot is not enforcing right now (sbctl reports secure_boot:
+          false). Enable Secure Boot in firmware (your sbctl keys are already
+          enrolled), re-enable the TPM if you disabled it, boot in, confirm with
+          `sbctl status`, then re-run secureboot.yml. Sealing now would bind the
+          key to a transient PCR 7 and reproduce the boot loop.
+
+    - name: resolve LUKS backing device for /
+      shell: |
+        set -e
+        src=$(findmnt -no SOURCE /)
+        case "$src" in
+          /dev/mapper/*) cryptsetup status "${src#/dev/mapper/}" | awk '/device:/{print $2}' ;;
+          *) echo "" ;;
+        esac
+      register: luks_dev_raw
+      changed_when: false
+
+    - name: fail if root is not on a LUKS device
+      fail:
+        msg: "Root is not a LUKS mapper; TPM unlock needs full-disk encryption."
+      when: luks_dev_raw.stdout | trim | length == 0
+
+    - name: set luks_dev fact
+      set_fact:
+        luks_dev: "{{ luks_dev_raw.stdout | trim }}"
+
+    - name: list existing clevis bindings
+      command: "clevis luks list -d {{ luks_dev }}"
+      register: clevis_list
+      changed_when: false
+      failed_when: false
+
+    - name: drop any existing tpm2 binding(s) so we re-seal against the current PCR 7
+      shell: |
+        set -e
+        clevis luks list -d {{ luks_dev }} | awk -F: '/tpm2/{print $1}' | while read -r slot; do
+          clevis luks unbind -f -d {{ luks_dev }} -s "$slot"
+        done
+      when: "'tpm2' in clevis_list.stdout"
+
+    - name: prompt for the current LUKS passphrase (to enroll the TPM keyslot)
+      pause:
+        prompt: "Enter the current LUKS passphrase to enroll TPM2 auto-unlock"
+        echo: no
+      register: _luks_pp
+      no_log: true
+
+    - name: bind LUKS to TPM2 on PCR {{ tpm_pcr_ids }} against the current state (keeps the passphrase slot)
+      shell: >
+        printf '%s' "{{ _luks_pp.user_input }}" |
+        clevis luks bind -y -d {{ luks_dev }} -k -
+        tpm2 '{"pcr_bank":"{{ tpm_pcr_bank }}","pcr_ids":"{{ tpm_pcr_ids }}"}'
+      no_log: true
+
+    # The bind above only writes a keyslot + token into the LUKS header; it does
+    # NOT touch the initramfs. Rebuild + re-sign the UKI now, AFTER the binding
+    # exists, so the clevis dracut module (forced in via 01-packages) is baked
+    # into the signed boot image and can actually unseal the TPM at next boot.
+    # uki.conf already carries the SB signing keys (added in 04-sign), so this
+    # one step both includes clevis and signs the result.
+    - name: rebuild + re-sign the UKI so the clevis module is baked into the signed boot image
+      shell: |
+        set -e
+        kver=$(ls /lib/modules | sort -V | tail -n1)
+        kernel-install add "$kver" "/boot/vmlinuz-$kver"
