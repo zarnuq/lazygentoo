@@ -1,10 +1,6 @@
 ---
 ##############################################################################
 # laptop power tuning: acpid lid-suspend + TLP (both Intel & AMD) + thermald on
-# Intel, plus the swayidle package for idle-lock (you wire it into your dwl
-# autostart yourself). package lists + services to enable come from config.yml
-# (power_packages[_intel] / power_services[_intel]). desktop is its own play, so
-# re-probe for a laptop here -- base's is_laptop fact doesn't carry across runs.
 ##############################################################################
 - name: probe for ACPI lid switch (laptop detection)
   shell: "ls /proc/acpi/button/lid/*/state 2>/dev/null | head -1"
@@ -43,19 +39,7 @@
       poll: 30
 
     #########################################
-    # runit service definitions (acpid/tlp/thermald all ship in this playbook's
-    # files/runit/sv) -> copy the ones we're about to enable into /etc/sv.
-    #########################################
-    - name: ship power runit service definitions to /etc/sv
-      copy:
-        src: "runit/sv/{{ item }}/"
-        dest: "/etc/sv/{{ item }}/"
-        mode: "0755"
-      loop: "{{ power_services_eff }}"
-
-    #########################################
     # acpid config: suspend on lid close (runit+seatd has no logind to do it).
-    # acpid reads /etc/acpi/events only at startup.
     #########################################
     - name: acpid lid event
       copy:
@@ -81,7 +65,7 @@
     - name: enable power runit services
       file:
         src: "/etc/sv/{{ item }}"
-        dest: "/etc/service/{{ item }}"
+        dest: "/service/{{ item }}"
         state: link
         force: yes
       loop: "{{ power_services_eff }}"

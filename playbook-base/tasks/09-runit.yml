@@ -74,6 +74,19 @@
       HARDWARECLOCK="UTC"
       KEYMAP="{{ keymap }}"
 
+# Override the package's stage 2 + 3 wrappers so runit supervises and shuts down
+# /service — sv's compiled-in default dir — instead of /etc/service. This is
+# what lets bare `sv <name>` work everywhere with no env (shell, doas, ansible).
+# files/runit/{2,3} are the stock Gentoo wrappers copied verbatim with only the
+# service-dir path swapped to /service. Stage 1 and rc.sh have no service-dir
+# reference, so they stay stock (package-provided).
+- name: override runit stage 2 + 3 to supervise /service
+  copy:
+    src: "runit/{{ item }}"
+    dest: "{{ chroot_dir }}/etc/runit/{{ item }}"
+    mode: "0755"
+  loop: ["2", "3"]
+
 #############################################
 # move over services files
 #############################################
@@ -114,21 +127,44 @@
   loop_control:
     label: "{{ item.path | basename }}"
 
-- name: check /etc/service exists
+# /service is the canonical service dir: it matches sv's compiled-in default, so
+# bare `sv <name>` resolves with no env for every caller (shell, doas, ansible).
+# Stage 2/3 (overridden above) watch /service, so /etc/service is never read.
+# The runit ebuild's pkg_postinst creates /etc/service and enables getties there
+# (an untracked action), so drop that dir — we enable everything into /service
+# ourselves below. A later `emerge sys-process/runit` may recreate a stray,
+# unwatched /etc/service; that is harmless, runit never looks at it.
+- name: ensure /service exists (canonical runit service dir)
   file:
-    path: "{{ chroot_dir }}/etc/service"
+    path: "{{ chroot_dir }}/service"
     state: directory
     mode: "0755"
+
+- name: drop the runit ebuild's unused /etc/service dir
+  file:
+    path: "{{ chroot_dir }}/etc/service"
+    state: absent
 
 - name: enable services
   file:
     src: "/etc/sv/{{ item }}"
-    dest: "{{ chroot_dir }}/etc/service/{{ item }}"
+    dest: "{{ chroot_dir }}/service/{{ item }}"
     state: link
     force: yes
   loop: "{{ runit_services + network_services }}"
   vars:
     network_services: "{{ ['dbus', 'NetworkManager'] if network_stack == 'networkmanager' else ['dhcpcd'] }}"
+
+# The runit package enables getty-tty1..6 into /etc/service at emerge; we removed
+# that dir above, so re-enable them into /service ourselves. Keep this list in
+# sync with the getty-tty run-script overrides earlier in this file.
+- name: enable getty-tty1..6
+  file:
+    src: "/etc/sv/getty-tty{{ item }}"
+    dest: "{{ chroot_dir }}/service/getty-tty{{ item }}"
+    state: link
+    force: yes
+  loop: [1, 2, 3, 4, 5, 6]
 
 #############################################
 # move over services files

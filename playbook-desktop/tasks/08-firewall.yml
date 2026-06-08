@@ -49,6 +49,6 @@
 - name: Enable ufw as a runit service
   file:
     src: /etc/sv/ufw
-    dest: /etc/service/ufw
+    dest: /service/ufw
     state: link
     force: yes

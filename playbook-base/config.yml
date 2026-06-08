@@ -101,7 +101,7 @@ accept_license: "*"
 
 # Global USE flags. Per-package USE goes in tasks/04-portage.yml.
 use_flags:
-  - networkmanager           # explicit; pulls NM into virtuals
+  - "{{ 'networkmanager' if network_stack == 'networkmanager' else '-networkmanager' }}"   # NM support in virtuals only when NM is the stack
   - pipewire                 # native pipewire support in apps that gate it
   - wayland                  # ditto for wayland output paths
   - screencast               # xdg-desktop-portal-wlr screen-capture path

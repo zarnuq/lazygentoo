@@ -38,9 +38,9 @@
   register: greetd_groups
   changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
 
-- name: Enable greetd as a runit service (symlink into /etc/service)
+- name: Enable greetd as a runit service (symlink into /service)
   file:
     src: /etc/sv/greetd
-    dest: /etc/service/greetd
+    dest: /service/greetd
     state: link
     force: yes
