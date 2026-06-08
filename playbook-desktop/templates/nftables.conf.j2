@@ -6,8 +6,8 @@
 # split to keep in sync. `nft -f` loads the whole ruleset atomically (all-or-
 # nothing), so there is no half-applied state to get stuck in.
 #
-# The allowed ports come from config.yml (ufw_allowed_tcp_ports /
-# ufw_allowed_udp_ports); add a port there and re-render to open it.
+# The allowed ports come from config.yml (firewall_allowed_tcp_ports /
+# firewall_allowed_udp_ports); add a port there and re-render to open it.
 
 flush ruleset
 
@@ -20,15 +20,15 @@ table inet filter {
     iif "lo" accept                       # loopback talks to itself
     ct state invalid drop                 # junk / out-of-state packets
     meta l4proto { icmp, icmpv6 } accept  # ping, IPv6 ND, path-MTU discovery
-{% if ufw_allowed_tcp_ports | default([]) | length > 0 %}
+{% if firewall_allowed_tcp_ports | default([]) | length > 0 %}
 
-    # inbound TCP whitelist (config.yml: ufw_allowed_tcp_ports)
-    tcp dport { {{ ufw_allowed_tcp_ports | join(', ') }} } accept
+    # inbound TCP whitelist (config.yml: firewall_allowed_tcp_ports)
+    tcp dport { {{ firewall_allowed_tcp_ports | join(', ') }} } accept
 {% endif %}
-{% if ufw_allowed_udp_ports | default([]) | length > 0 %}
+{% if firewall_allowed_udp_ports | default([]) | length > 0 %}
 
-    # inbound UDP whitelist (config.yml: ufw_allowed_udp_ports)
-    udp dport { {{ ufw_allowed_udp_ports | join(', ') }} } accept
+    # inbound UDP whitelist (config.yml: firewall_allowed_udp_ports)
+    udp dport { {{ firewall_allowed_udp_ports | join(', ') }} } accept
 {% endif %}
   }
 

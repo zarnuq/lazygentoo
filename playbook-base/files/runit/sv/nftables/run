@@ -1,8 +1,8 @@
 #!/bin/sh
-# Stateless firewall loader. nft -f exits after applying the ruleset,
-# so we then `chpst -b nftables pause` to keep runsv from respawning.
-# The matching finish script flushes on stop.
+# Stateless firewall loader: apply the ruleset once with `nft -f` (atomic), then
+# `sleep infinity` so runsv keeps this service supervised — the rules live in the
+# kernel regardless of this process. (`pause` is not a real command; runit's
+# load-and-hold idiom is a blocking sleep.) On stop runsv runs ./finish (flush).
 exec 2>&1
-set -e
 [ -r /etc/nftables.conf ] && /usr/sbin/nft -f /etc/nftables.conf
-exec chpst -b nftables pause
+exec sleep infinity

@@ -40,6 +40,7 @@
     src: /etc/sv/nix-daemon
     dest: /service/nix-daemon
     state: link
+    follow: false
     force: yes
 
 - name: start nix-daemon

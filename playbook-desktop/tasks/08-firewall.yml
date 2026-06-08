@@ -1,54 +1,52 @@
 ---
 ##############################
-# set ufw firewall whitelist #
+# host firewall (nftables)   #
 ##############################
-- name: load netfilter modules so ufw's first iptables call doesn't race
+# Minimal nftables firewall: one inet table (IPv4+IPv6), default-deny inbound,
+# allowing established/related + loopback + ICMP + the ports from config.yml
+# (firewall_allowed_{tcp,udp}_ports). Replaces ufw -- no daemon, no enable-state
+# file, atomic `nft -f` loads. The nftables runit service re-applies it on boot.
+- name: load nf_tables + conntrack modules (avoid first-load race)
   command: "modprobe {{ item }}"
   loop:
-    - ip_tables
-    - ip6_tables
-    - iptable_filter
-    - ip6table_filter
+    - nf_tables
     - nf_conntrack
   changed_when: false
   failed_when: false
 
-- name: ufw allow inbound TCP ports
-  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw allow {{ item }}/tcp 2>&1"
-  loop: "{{ ufw_allowed_tcp_ports | default([]) }}"
-  loop_control:
-    label: "{{ item }}/tcp"
-  register: ufw_tcp
-  changed_when: "'Rule added' in ufw_tcp.stdout"
-  failed_when:
-    - ufw_tcp.rc != 0
-    - "'Skipping adding existing rule' not in ufw_tcp.stdout"
+- name: render /etc/nftables.conf
+  template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0644"
+    validate: "/usr/sbin/nft -c -f %s"
+  register: nft_conf
 
-- name: ufw allow inbound UDP ports
-  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw allow {{ item }}/udp 2>&1"
-  loop: "{{ ufw_allowed_udp_ports | default([]) }}"
-  loop_control:
-    label: "{{ item }}/udp"
-  register: ufw_udp
-  changed_when: "'Rule added' in ufw_udp.stdout"
-  failed_when:
-    - ufw_udp.rc != 0
-    - "'Skipping adding existing rule' not in ufw_udp.stdout"
+- name: load the ruleset now (atomic)
+  command: /usr/sbin/nft -f /etc/nftables.conf
+  changed_when: nft_conf is changed
 
-- name: ufw enable
-  shell: "PATH=/usr/sbin:/sbin:/usr/bin:/bin ufw --force enable 2>&1"
-  register: ufw_enable
-  changed_when: "'Firewall is active' in ufw_enable.stdout"
-
-- name: ufw set ENABLED=yes
-  lineinfile:
-    path: /etc/ufw/ufw.conf
-    regexp: '^ENABLED='
-    line: 'ENABLED=yes'
-
-- name: Enable ufw as a runit service
+- name: ensure nftables log dir exists
   file:
-    src: /etc/sv/ufw
-    dest: /service/ufw
+    path: /var/log/runit/nftables
+    state: directory
+    mode: "0755"
+
+- name: enable nftables as a runit service (symlink into /service)
+  file:
+    src: /etc/sv/nftables
+    dest: /service/nftables
     state: link
+    follow: false
     force: yes
+
+# Restart so the service re-reads /etc/nftables.conf when its config changed.
+# `sv` resolves the bare name via /service (sv's compiled-in default dir).
+- name: (re)start nftables service when runit is PID 1
+  shell: |
+    if [ "$(cat /proc/1/comm)" = "runit" ]; then
+      sv -w 10 restart nftables
+    else
+      echo "not running runit as PID 1; nftables loads on next runit boot"
+    fi
+  changed_when: false

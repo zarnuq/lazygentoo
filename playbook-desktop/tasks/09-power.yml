@@ -67,5 +67,6 @@
         src: "/etc/sv/{{ item }}"
         dest: "/service/{{ item }}"
         state: link
+        follow: false
         force: yes
       loop: "{{ power_services_eff }}"

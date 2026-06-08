@@ -128,7 +128,7 @@ apps_packages:
 
   # network / VPN / firewall / storage
   - net-vpn/openvpn
-  - net-firewall/ufw
+  - net-firewall/nftables
   - sys-fs/udisks
   - net-p2p/syncthing
 
@@ -138,10 +138,11 @@ apps_packages:
   # messaging
   - net-im/signal-desktop-bin
 
-# firewall ports to open (to be nix like)
-ufw_allowed_tcp_ports:
+# inbound ports to open in the nftables firewall (rendered into /etc/nftables.conf
+# by tasks/08-firewall.yml via templates/nftables.conf.j2). Default-deny inbound.
+firewall_allowed_tcp_ports:
   - 22
-ufw_allowed_udp_ports: []
+firewall_allowed_udp_ports: []
 
 power_packages:
   - sys-power/acpid       # ACPI events -> lid-close suspend

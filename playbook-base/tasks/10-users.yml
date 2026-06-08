@@ -64,4 +64,5 @@
     src: /usr/bin/doas
     dest: "{{ chroot_dir }}/usr/local/bin/sudo"
     state: link
+    follow: false
     force: yes

@@ -43,4 +43,5 @@
     src: /etc/sv/greetd
     dest: /service/greetd
     state: link
+    follow: false
     force: yes

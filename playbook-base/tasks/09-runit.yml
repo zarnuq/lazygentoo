@@ -24,6 +24,7 @@
     src: /usr/bin/runit-init
     dest: "{{ chroot_dir }}/sbin/init"
     state: link
+    follow: false
     force: yes
 
 - name: ensure /etc/runit and /etc/runit/rc exist
@@ -150,6 +151,7 @@
     src: "/etc/sv/{{ item }}"
     dest: "{{ chroot_dir }}/service/{{ item }}"
     state: link
+    follow: false
     force: yes
   loop: "{{ runit_services + network_services }}"
   vars:
@@ -163,6 +165,7 @@
     src: "/etc/sv/getty-tty{{ item }}"
     dest: "{{ chroot_dir }}/service/getty-tty{{ item }}"
     state: link
+    follow: false
     force: yes
   loop: [1, 2, 3, 4, 5, 6]
 
