@@ -86,8 +86,11 @@ gentoo_mirror: "https://distfiles.gentoo.org/releases/amd64/autobuilds"
 # Init choice
 stage3_pointer: "current-stage3-amd64-openrc/latest-stage3-amd64-openrc.txt"
 
-# Profile
-gentoo_profile: "default/linux/amd64/23.0/desktop"
+# Profile — base (non-desktop). The desktop profile's USE additions are
+# re-added explicitly in use_flags below (the "desktop baseline" block), so the
+# Wayland/GTK stack still builds. Trade: more explicit USE here, no profile-implicit
+# flags. matched binhost (base 23.0) USE is closer, so more binpkgs land.
+gentoo_profile: "default/linux/amd64/23.0"
 
 ####################
 # COMPILER OPTIONS #
@@ -107,6 +110,26 @@ use_flags:
   - screencast               # xdg-desktop-portal-wlr screen-capture path
   - vaapi                    # GPU-accelerated video decode (Intel/AMD via Mesa)
   - vulkan                   # Vulkan API — Mesa drivers + wlroots vulkan backend
+  # --- desktop-profile baseline (re-added after dropping the desktop profile) ---
+  # The base profile doesn't enable these; the dwl/GTK/Wayland stack expects them.
+  # Review/trim to taste — most apps pull hard deps regardless; these toggle optional paths.
+  - X                        # X11 libs / XWayland backends (wlroots X support)
+  - xcb                      # XCB bindings (XWayland, several gui libs)
+  - opengl                   # GL rendering paths
+  - gtk                      # GTK frontends (nemo, gtk apps, portals)
+  - cairo                    # 2D vector rendering
+  - pango                    # text layout/shaping
+  - truetype                 # TTF/OTF font support (was a desktop default)
+  - unicode                  # unicode handling
+  - png                      # PNG image support
+  - jpeg                     # JPEG image support
+  - svg                      # SVG (librsvg) — note: pulls rust
+  - gif                      # GIF image support
+  - exif                     # image EXIF metadata
+  - lcms                     # color management
+  - dbus                     # D-Bus integration where gated by USE
+  - alsa                     # ALSA backend under PipeWire
+  - udev                     # device hotplug (virtual, but gate some optional paths)
   - "-elogind"               # seatd-only — kills elogind→polkit→gnome chain
   - "-systemd"               # non-systemd stack; defensive
   - "-consolekit"            # conflicts with seatd

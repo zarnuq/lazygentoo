@@ -22,11 +22,18 @@
     - package.accept_keywords
     - package.license
     - repos.conf
+    - binrepos.conf
 
 - name: config gentoo repo (rsync)
   copy:
     src: portage/repos.conf/gentoo.conf
     dest: "{{ chroot_dir }}/etc/portage/repos.conf/gentoo.conf"
+    mode: "0644"
+
+- name: config gentoo binary package host
+  copy:
+    src: portage/binrepos.conf/gentoobinhost.conf
+    dest: "{{ chroot_dir }}/etc/portage/binrepos.conf/gentoobinhost.conf"
     mode: "0644"
 
 - name: pull initial portage tree
@@ -38,6 +45,21 @@
   command: '{{ in_chroot }} "eselect profile set {{ gentoo_profile }}"'
   register: profile_set
   changed_when: "'now set' in profile_set.stdout or 'set to' in profile_set.stdout"
+
+# binpkg-request-signature (set in make.conf FEATURES) verifies binhost packages
+# against Gentoo's release keys. getuto builds the portage trust keyring from
+# sec-keys/openpgp-keys-gentoo-release (shipped in stage3). Must run BEFORE any
+# emerge that touches the binhost. Emerge getuto itself from source (binhost not
+# yet trusted) by disabling the binpkg FEATURES for this one call.
+- name: install getuto (binhost signature trust helper)
+  command: '{{ in_chroot }} "FEATURES=''-getbinpkg -binpkg-request-signature'' emerge --quiet-build --noreplace app-portage/getuto"'
+  args:
+    creates: "{{ chroot_dir }}/usr/bin/getuto"
+
+- name: build gentoo binhost signature trust keyring
+  command: '{{ in_chroot }} "getuto"'
+  args:
+    creates: "{{ chroot_dir }}/etc/portage/gnupg"
 
 - name: install cpuid2cpuflags (for accurate CPU_FLAGS_X86)
   command: '{{ in_chroot }} "emerge --quiet-build app-portage/cpuid2cpuflags"'
