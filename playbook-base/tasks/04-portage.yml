@@ -23,6 +23,7 @@
     - package.license
     - repos.conf
     - binrepos.conf
+    - env
 
 - name: config gentoo repo (rsync)
   copy:
@@ -45,21 +46,6 @@
   command: '{{ in_chroot }} "eselect profile set {{ gentoo_profile }}"'
   register: profile_set
   changed_when: "'now set' in profile_set.stdout or 'set to' in profile_set.stdout"
-
-# binpkg-request-signature (set in make.conf FEATURES) verifies binhost packages
-# against Gentoo's release keys. getuto builds the portage trust keyring from
-# sec-keys/openpgp-keys-gentoo-release (shipped in stage3). Must run BEFORE any
-# emerge that touches the binhost. Emerge getuto itself from source (binhost not
-# yet trusted) by disabling the binpkg FEATURES for this one call.
-- name: install getuto (binhost signature trust helper)
-  command: '{{ in_chroot }} "FEATURES=''-getbinpkg -binpkg-request-signature'' emerge --quiet-build --noreplace app-portage/getuto"'
-  args:
-    creates: "{{ chroot_dir }}/usr/bin/getuto"
-
-- name: build gentoo binhost signature trust keyring
-  command: '{{ in_chroot }} "getuto"'
-  args:
-    creates: "{{ chroot_dir }}/etc/portage/gnupg"
 
 - name: install cpuid2cpuflags (for accurate CPU_FLAGS_X86)
   command: '{{ in_chroot }} "emerge --quiet-build app-portage/cpuid2cpuflags"'
@@ -84,9 +70,32 @@
     dest: "{{ chroot_dir }}/etc/portage/package.use/"
     mode: "0644"
 
-#########################################
-# world update with new compiler flags
-#########################################
+# per-package CFLAGS overrides (no-LTO pins) — must land before the source
+# @world build so LTO-hostile packages don't abort it
+- name: add per-package env files
+  copy:
+    src: portage/env/
+    dest: "{{ chroot_dir }}/etc/portage/env/"
+    mode: "0644"
+
+- name: add package.env (maps packages to env overrides)
+  copy:
+    src: portage/package.env
+    dest: "{{ chroot_dir }}/etc/portage/package.env"
+    mode: "0644"
+
+# scoped binhost: bring binhost_packages to the target version+USE from binpkg so
+# the @world below finds them satisfied and doesn't recompile. --update --newuse
+# (not --noreplace) so they actually replace the older stage3 toolchain.
+- name: pull whitelisted packages from binhost
+  command: >
+    {{ in_chroot }} "emerge --quiet-build --getbinpkg --usepkg --update --newuse
+    {{ binhost_packages | join(' ') }}"
+  when: binhost_packages | length > 0
+  async: 7200
+  poll: 30
+
+# world update (source build; binhost not used here)
 - name: update @world to use new profile/USE flags
   command: '{{ in_chroot }} "emerge --quiet-build --update --deep --newuse --with-bdeps=y @world"'
   async: 14400

@@ -30,7 +30,7 @@
 - name: identify CPU
   set_fact:
     cpu_microcode: >-
-      {%- set vendor = ansible_processor[1] | default('') -%}
+      {%- set vendor = ansible_facts['processor'][1] | default('') -%}
       {%- if 'AuthenticAMD' in vendor -%}amd
       {%- elif 'GenuineIntel' in vendor -%}intel
       {%- else -%}{%- endif -%}

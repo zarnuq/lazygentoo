@@ -86,17 +86,16 @@ gentoo_mirror: "https://distfiles.gentoo.org/releases/amd64/autobuilds"
 # Init choice
 stage3_pointer: "current-stage3-amd64-openrc/latest-stage3-amd64-openrc.txt"
 
-# Profile — base (non-desktop). The desktop profile's USE additions are
-# re-added explicitly in use_flags below (the "desktop baseline" block), so the
-# Wayland/GTK stack still builds. Trade: more explicit USE here, no profile-implicit
-# flags. matched binhost (base 23.0) USE is closer, so more binpkgs land.
+# Profile — base (non-desktop). The desktop profile's USE additions are re-added
+# explicitly in use_flags below (the "desktop baseline" block) so the Wayland/GTK
+# stack still builds.
 gentoo_profile: "default/linux/amd64/23.0"
 
 ####################
 # COMPILER OPTIONS #
 ####################
 
-common_flags: "-march=native -O2 -pipe"
+common_flags: "-march=native -O3 -flto=auto -fno-semantic-interposition -pipe"
 makeopts_jobs: 0          # 0 = auto (use detected vCPUs)
 emerge_jobs: 0            # 0 = ceil(vCPUs/2)
 accept_keywords: "amd64"  # use "~amd64" for testing branch
@@ -112,7 +111,6 @@ use_flags:
   - vulkan                   # Vulkan API — Mesa drivers + wlroots vulkan backend
   # --- desktop-profile baseline (re-added after dropping the desktop profile) ---
   # The base profile doesn't enable these; the dwl/GTK/Wayland stack expects them.
-  # Review/trim to taste — most apps pull hard deps regardless; these toggle optional paths.
   - X                        # X11 libs / XWayland backends (wlroots X support)
   - xcb                      # XCB bindings (XWayland, several gui libs)
   - opengl                   # GL rendering paths
@@ -129,7 +127,7 @@ use_flags:
   - lcms                     # color management
   - dbus                     # D-Bus integration where gated by USE
   - alsa                     # ALSA backend under PipeWire
-  - udev                     # device hotplug (virtual, but gate some optional paths)
+  - udev                     # device hotplug
   - "-elogind"               # seatd-only — kills elogind→polkit→gnome chain
   - "-systemd"               # non-systemd stack; defensive
   - "-consolekit"            # conflicts with seatd
@@ -178,6 +176,31 @@ runit_services:
   - seatd
   - chronyd
 
+####################
+# BINHOST PACKAGES #
+####################
+
+# pulled prebuilt from binhost (--getbinpkg); everything else (incl. base_packages)
+# compiles from source
+binhost_packages:
+  - sys-devel/gcc
+  - llvm-core/llvm
+  - llvm-core/clang
+  - dev-lang/rust
+  - dev-lang/go
+
+#####################
+# KERNEL BUILD DEPS #
+#####################
+
+# extra packages needed to compile sys-kernel/gentoo-sources from source
+# (most build tools are in stage3; these usually are not). pahole is REQUIRED
+# by the config's CONFIG_DEBUG_INFO_BTF=y — without it the build fails.
+kernel_build_deps:
+  - dev-util/pahole        # BTF generation (CONFIG_DEBUG_INFO_BTF)
+  - sys-devel/bc           # kernel/timeconst.bc etc.
+  - dev-libs/elfutils      # libelf for objtool
+
 #################
 # BASE PACKAGES #
 #################
@@ -187,7 +210,7 @@ base_packages:
   # boot
   - sys-kernel/linux-firmware    # binary firmware blobs
   - sys-kernel/installkernel     # post-emerge hook
-  - sys-kernel/gentoo-kernel-bin # prebuilt distribution kernel
+  # kernel itself is sys-kernel/gentoo-sources, built from source in 06-kernel.yml
 
   # init / core
   - app-admin/sysklogd           # syslog daemon

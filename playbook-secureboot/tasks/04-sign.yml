@@ -13,7 +13,10 @@
       SecureBootCertificate={{ sb_db_cert }}
 
 - name: rebuild + sign the current UKI
+  # base builds /boot with only UKIs (no loose vmlinuz), so re-sign from the
+  # source bzImage. /usr/src/linux (gentoo-sources USE=symlink) + the built
+  # bzImage persist on the booted system.
   shell: |
     set -e
     kver=$(ls /lib/modules | sort -V | tail -n1)
-    kernel-install add "$kver" "/boot/vmlinuz-$kver"
+    kernel-install add "$kver" /usr/src/linux/arch/x86/boot/bzImage

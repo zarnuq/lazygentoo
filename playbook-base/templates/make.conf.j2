@@ -3,6 +3,7 @@ CFLAGS="${COMMON_FLAGS}"
 CXXFLAGS="${COMMON_FLAGS}"
 FCFLAGS="${COMMON_FLAGS}"
 FFLAGS="${COMMON_FLAGS}"
+RUSTFLAGS="-C target-cpu=native"
 
 CHOST="x86_64-pc-linux-gnu"
 MAKEOPTS="{{ makeopts_effective }}"
@@ -18,12 +19,13 @@ INPUT_DEVICES="libinput"
 PORTAGE_TMPDIR="/var/tmp"
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
+INSTALL_MASK="/boot/System.map* /boot/config*"
 
-FEATURES="${FEATURES} parallel-install ccache buildpkg getbinpkg binpkg-request-signature"
+FEATURES="${FEATURES} parallel-install ccache buildpkg"
 CCACHE_DIR="/var/cache/ccache"
 CCACHE_SIZE="15G"
 
-EMERGE_DEFAULT_OPTS="--quiet-build=y --keep-going=y --jobs={{ emerge_jobs_effective }} --load-average={{ (ansible_processor_vcpus | int) + 1 }}"
+EMERGE_DEFAULT_OPTS="--quiet-build=y --keep-going=y --jobs={{ emerge_jobs_effective }} --load-average={{ (ansible_facts['processor_vcpus'] | int) + 1 }}"
 
 L10N="{{ default_locale.split('.')[0].split('_')[0] }}"
 LINGUAS="{{ default_locale.split('.')[0].split('_')[0] }}"

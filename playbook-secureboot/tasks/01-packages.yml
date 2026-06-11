@@ -19,6 +19,13 @@
 - name: install sbctl
   command: emerge --quiet-build --noreplace app-crypt/sbctl
 
+# ukify (via kernel-install) verifies the kernel's signature with `sbverify`
+# before signing the UKI; that binary ships in sbsigntools. sbctl does its own
+# Go signing and does NOT pull this in, so without it 04-sign dies on
+# "Tool sbverify not installed!".
+- name: install sbsigntools (provides sbverify/sbsign for ukify)
+  command: emerge --quiet-build --noreplace app-crypt/sbsigntools
+
 - name: ensure package.accept_keywords dir
   file: { path: /etc/portage/package.accept_keywords, state: directory, mode: "0755" }
   when: tpm_unlock | bool

@@ -1,4 +1,2 @@
 net-misc/networkmanager -modemmanager -bluetooth -elogind
-# NM drives the wpa_supplicant *daemon* over D-Bus; the Qt wpa_gui front-end
-# (USE=gui) is dead weight on a headless-of-GUI-tools setup.
 net-wireless/wpa_supplicant -gui

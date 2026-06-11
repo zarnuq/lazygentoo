@@ -23,7 +23,7 @@
 - name: make root kernel cmdline
   set_fact:
     root_cmdline: >-
-      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype={{ root_fs }} rw quiet loglevel=3 init=/usr/bin/runit-init
+      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype={{ root_fs }} rw quiet loglevel=3 preempt=full init=/usr/bin/runit-init
 
 - name: write kernel cmdline
   copy:
@@ -50,11 +50,13 @@
     content: |
       hostonly="yes"
       compress="zstd"
-      # safety net so a chroot-built hostonly initramfs can always mount root:
-      # force the root fs module + disk controller driver (often missed when the
-      # livecd kernel has them builtin but gentoo-kernel-bin builds them modular).
-      filesystems+=" {{ root_fs }} "
-      force_drivers+=" {{ root_disk_driver }} "
+      # safety net so a chroot-built hostonly initramfs can always mount root: force
+      # the root fs + disk controller in. Guarded by a module-check so a custom kernel
+      # that builds these BUILTIN doesn't break dracut (can't force a builtin driver;
+      # it's already in the kernel). Modular gentoo-kernel-bin still gets the net.
+      _k="${kernel:-$(uname -r)}"
+      case "$(modinfo -k "$_k" -F filename {{ root_fs }} 2>/dev/null)" in *.ko*) filesystems+=" {{ root_fs }} " ;; esac
+      case "$(modinfo -k "$_k" -F filename {{ root_disk_driver }} 2>/dev/null)" in *.ko*) force_drivers+=" {{ root_disk_driver }} " ;; esac
       omit_dracutmodules+=" systemd systemd-initrd dracut-systemd systemd-ask-password network network-manager ifcfg plymouth lvm mdraid dmraid multipath nfs iscsi nbd i18n "
 
 - name: write dracut crypt config (fde_enable=true)
@@ -71,10 +73,10 @@
     "emerge --quiet-build sys-fs/cryptsetup"
   when: fde_enable
 
-- name: install firmware, UKI toolchain, installkernel
+- name: install firmware, UKI toolchain, installkernel, kernel build deps
   command: >
     {{ in_chroot }}
-    "emerge --quiet-build --newuse sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/dracut sys-apps/systemd-utils sys-boot/efibootmgr"
+    "emerge --quiet-build --newuse sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/dracut sys-apps/systemd-utils sys-boot/efibootmgr {{ kernel_build_deps | join(' ') }}"
   async: 3600
   poll: 30
 
@@ -82,9 +84,32 @@
   command: '{{ in_chroot }} "emerge --quiet-build sys-firmware/intel-microcode"'
   when: cpu_microcode == "intel"
 
-- name: install binary kernel
-  command: '{{ in_chroot }} "emerge --quiet-build sys-kernel/gentoo-kernel-bin"'
-  async: 7200
+- name: install kernel source tree (USE=symlink -> /usr/src/linux)
+  command: '{{ in_chroot }} "emerge --quiet-build --noreplace sys-kernel/gentoo-sources"'
+  async: 1800
+  poll: 30
+
+# Ship a validated .config (files/kernel/config). It builds storage/fs/crypt and
+# the EFI framebuffer BUILTIN (nvme, ext4, dm-crypt, fb_efi/sysfb) so the kernel
+# sees the disk and shows the LUKS prompt with no initramfs gymnastics. olddefconfig
+# absorbs any version drift between the shipped config and the emerged source.
+- name: install kernel .config
+  copy:
+    src: kernel/config
+    dest: "{{ chroot_dir }}/usr/src/linux/.config"
+    mode: "0644"
+
+- name: adapt .config to the emerged source (non-interactive)
+  command: '{{ in_chroot }} "make -C /usr/src/linux olddefconfig"'
+
+- name: compile the kernel
+  command: '{{ in_chroot }} "make -C /usr/src/linux {{ makeopts_effective }}"'
+  async: 3600
+  poll: 30
+
+- name: install kernel modules
+  command: '{{ in_chroot }} "make -C /usr/src/linux modules_install"'
+  async: 1800
   poll: 30
 
 - name: write kernel-install / UKI config
@@ -109,7 +134,11 @@
     - 95-efibootmgr-register.install
     - 96-prune-old-ukis.install
 
-- name: build + register UKI (kernel-install)
+# Feed the bzImage straight from the source tree (NOT /boot) so kernel-install
+# builds+registers the UKI without ever dropping a loose vmlinuz/System.map/config
+# in /boot. dracut bundles the (now host-only) microcode into the UKI. Net: /boot
+# holds only EFI/Linux/<token>-<kver>.efi.
+- name: build + register UKI (kernel-install) from the source bzImage
   command: >
     {{ in_chroot }}
-    "kver=$(ls /lib/modules | sort -V | tail -n1); kernel-install add \"$kver\" \"/boot/vmlinuz-$kver\""
+    "kver=$(make -s -C /usr/src/linux kernelrelease); kernel-install add \"$kver\" /usr/src/linux/arch/x86/boot/bzImage"

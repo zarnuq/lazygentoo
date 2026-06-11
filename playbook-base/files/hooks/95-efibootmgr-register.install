@@ -10,6 +10,13 @@
 # rather than by label, which is robust against varying output
 # formats across efibootmgr versions.
 #
+# On "add" we PURGE every same-named entry and recreate, rather
+# than skip-if-present. A reinstall reuses the UKI filename (same
+# KVER) but repartitions the disk, so a leftover entry from a prior
+# install points at a now-destroyed ESP (stale PARTUUID). Skipping
+# on that false match left the box unbootable. Delete-then-create
+# makes the entry self-correcting across reinstalls.
+#
 # Managed by playbook-base/tasks/06-kernel.yml.
 
 set -e
@@ -33,16 +40,17 @@ LABEL="${LABEL_PREFIX} ${KVER}"
 UKI_FILE="${TOKEN}-${KVER}.efi"
 UKI_PATH="${ESP}/EFI/Linux/${UKI_FILE}"
 
-# Find the BootXXXX hex id for the entry pointing at our UKI.
+# Print every BootXXXX hex id whose entry references our UKI.
 # Match on UKI filename: it's unique per-KVER and appears in the
-# efibootmgr device path. Bulletproof against label parsing.
-find_id() {
+# efibootmgr device path. Bulletproof against label parsing. Returns
+# all matches (no exit) so callers can purge stale duplicates too.
+find_ids() {
     efibootmgr | awk -v f="$1" '
         /^Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]/ && index($0, f) > 0 {
-            sub(/^Boot/, "")
-            sub(/[* \t].*/, "")
-            print
-            exit
+            id = $0
+            sub(/^Boot/, "", id)
+            sub(/[* \t].*/, "", id)
+            print id
         }'
 }
 
@@ -53,20 +61,26 @@ add)
         exit 0
     }
 
-    if [ -z "$(find_id "$UKI_FILE")" ]; then
-        SRC=$(findmnt -nro SOURCE "$ESP")
-        case "$SRC" in
-            *nvme*n*p*) DISK="${SRC%p*}" ;;
-            *)          DISK="${SRC%[0-9]*}" ;;
-        esac
-        PART="${SRC##*[!0-9]}"
-        LOADER="$(echo "/EFI/Linux/${UKI_FILE}" | sed 's|/|\\|g')"
-        efibootmgr --create --disk "$DISK" --part "$PART" \
-            --label "$LABEL" --loader "$LOADER" --quiet
-        echo "95-efibootmgr-register: created entry '$LABEL'"
-    fi
+    # Purge any pre-existing entry for this filename (likely stale from
+    # a prior install — see header), then create a fresh one against the
+    # current ESP. find_ids may return several; delete them all.
+    for id in $(find_ids "$UKI_FILE"); do
+        efibootmgr -b "$id" -B --quiet
+        echo "95-efibootmgr-register: removed stale entry $id"
+    done
 
-    NEW_ID=$(find_id "$UKI_FILE")
+    SRC=$(findmnt -nro SOURCE "$ESP")
+    case "$SRC" in
+        *nvme*n*p*) DISK="${SRC%p*}" ;;
+        *)          DISK="${SRC%[0-9]*}" ;;
+    esac
+    PART="${SRC##*[!0-9]}"
+    LOADER="$(echo "/EFI/Linux/${UKI_FILE}" | sed 's|/|\\|g')"
+    efibootmgr --create --disk "$DISK" --part "$PART" \
+        --label "$LABEL" --loader "$LOADER" --quiet
+    echo "95-efibootmgr-register: created entry '$LABEL'"
+
+    NEW_ID=$(find_ids "$UKI_FILE" | head -n1)
     [ -z "$NEW_ID" ] && { echo "95-efibootmgr-register: failed to resolve new boot id" >&2; exit 1; }
 
     if [ "$PROMOTE_NEW_TO_DEFAULT" = "true" ]; then
@@ -80,11 +94,10 @@ add)
     fi
     ;;
 remove)
-    ID=$(find_id "$UKI_FILE")
-    [ -n "$ID" ] && {
-        efibootmgr -b "$ID" -B --quiet
-        echo "95-efibootmgr-register: removed entry '$LABEL'"
-    }
+    for id in $(find_ids "$UKI_FILE"); do
+        efibootmgr -b "$id" -B --quiet
+        echo "95-efibootmgr-register: removed entry $id '$LABEL'"
+    done
     [ -f "$UKI_PATH" ] && rm -f "$UKI_PATH"
     ;;
 esac

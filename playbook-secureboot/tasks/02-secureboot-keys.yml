@@ -26,13 +26,11 @@
   register: sb_status
   changed_when: false
 
-- name: enroll keys (skipped if already enrolled; requires firmware setup mode)
-  when: not (sb_status.stdout | from_json).installed
-  block:
-    - name: fail if firmware is not in setup mode
-      assert:
-        that: (sb_status.stdout | from_json).setup_mode | bool
-        fail_msg: "firmware not in Secure Boot setup mode; clear SB keys in BIOS and re-run"
-
-    - name: enroll keys
-      command: sbctl enroll-keys -m
+# Gate enrollment on setup_mode, NOT sbctl's `installed`. `installed` only means
+# "sbctl generated local keys" (true as soon as create-keys ran) -- it is NOT
+# "keys enrolled in firmware". setup_mode=true <=> no PK enrolled <=> enroll now;
+# setup_mode=false <=> keys already enrolled <=> skip. Keying on `installed` here
+# silently skipped enrollment on every run, so firmware keys never got enrolled.
+- name: enroll Secure Boot keys (firmware in setup mode; keeps Microsoft keys)
+  when: (sb_status.stdout | from_json).setup_mode | bool
+  command: sbctl enroll-keys -m

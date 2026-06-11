@@ -28,8 +28,8 @@
     have_swap:  "{{ swap_size_mib | int > 0 }}"
     plain_swap: "{{ (swap_size_mib | int > 0) and not (fde_enable | bool and encrypt_swap | bool) }}"
     esp_mountpoint: "/boot"
-    makeopts_effective: "-j{{ makeopts_jobs if makeopts_jobs | int > 0 else ansible_processor_vcpus }}"
-    emerge_jobs_effective: "{{ emerge_jobs if emerge_jobs | int > 0 else ((ansible_processor_vcpus | int + 1) // 2) }}"
+    makeopts_effective: "-j{{ makeopts_jobs if makeopts_jobs | int > 0 else ansible_facts['processor_vcpus'] }}"
+    emerge_jobs_effective: "{{ emerge_jobs if emerge_jobs | int > 0 else ((ansible_facts['processor_vcpus'] | int + 1) // 2) }}"
 
   tasks:
     - import_tasks: tasks/00-preflight.yml
