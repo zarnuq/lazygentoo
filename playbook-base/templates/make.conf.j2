@@ -19,7 +19,9 @@ INPUT_DEVICES="libinput"
 PORTAGE_TMPDIR="/var/tmp"
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
-INSTALL_MASK="/boot/System.map* /boot/config*"
+# Drop the non-host CPU vendor's microcode (ships in linux-firmware) so dracut's
+# early_microcode can't bundle dead weight into the UKI (Intel laptop => no AMD ucode).
+INSTALL_MASK="/boot/System.map* /boot/config*{% if cpu_microcode == 'intel' %} /lib/firmware/amd-ucode{% elif cpu_microcode == 'amd' %} /lib/firmware/intel-ucode{% endif %}"
 
 FEATURES="${FEATURES} parallel-install ccache buildpkg"
 CCACHE_DIR="/var/cache/ccache"

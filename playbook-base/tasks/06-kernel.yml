@@ -107,8 +107,13 @@
   async: 3600
   poll: 30
 
+# INSTALL_MOD_STRIP=1 strips DWARF debug info from each .ko at install time.
+# DEBUG_INFO=y is needed to *generate* BTF, but the leftover DWARF in the modules
+# is dead weight at boot (~592M -> ~70M module tree). strip --strip-debug keeps the
+# .BTF section, so BTF/CO-RE still works; it just sheds the DWARF that was bloating
+# the hostonly initramfs (and thus the UKI's .initrd section).
 - name: install kernel modules
-  command: '{{ in_chroot }} "make -C /usr/src/linux modules_install"'
+  command: '{{ in_chroot }} "make -C /usr/src/linux INSTALL_MOD_STRIP=1 modules_install"'
   async: 1800
   poll: 30
 
