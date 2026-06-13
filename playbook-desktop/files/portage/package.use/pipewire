@@ -1,1 +1,1 @@
-media-video/pipewire sound-server pipewire-alsa screencast -bluetooth -modemmanager -systemd
+media-video/pipewire sound-server pipewire-alsa -modemmanager

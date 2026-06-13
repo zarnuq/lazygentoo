@@ -1,2 +1,2 @@
-net-misc/networkmanager -modemmanager -bluetooth -elogind
+net-misc/networkmanager -modemmanager
 net-wireless/wpa_supplicant -gui

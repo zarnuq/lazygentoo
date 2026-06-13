@@ -45,6 +45,10 @@
 - name: (re)start nftables service when runit is PID 1
   shell: |
     if [ "$(cat /proc/1/comm)" = "runit" ]; then
+      # runsvdir rescans /service every ~5s; wait for runsv before sv restart
+      for _ in $(seq 1 15); do
+        [ -e /service/nftables/supervise/ok ] && break; sleep 1
+      done
       sv -w 10 restart nftables
     else
       echo "not running runit as PID 1; nftables loads on next runit boot"

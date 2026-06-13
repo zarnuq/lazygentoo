@@ -46,6 +46,10 @@
 - name: start nix-daemon
   shell: |
     if [ "$(cat /proc/1/comm)" = "runit" ]; then
+      # runsvdir rescans /service every ~5s; wait for runsv before sv up
+      for _ in $(seq 1 15); do
+        [ -e /service/nix-daemon/supervise/ok ] && break; sleep 1
+      done
       sv -w 30 up nix-daemon
     else
       echo "not running runit as PID 1; nix-daemon will start on next runit boot"

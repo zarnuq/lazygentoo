@@ -139,6 +139,20 @@
     - 95-efibootmgr-register.install
     - 96-prune-old-ukis.install
 
+# Mask the systemd microcode plugins (symlink->/dev/null is kernel-install's disable
+# convention). dracut early_microcode=yes already bundles the host microcode into the
+# UKI; left enabled these drop a redundant {amd,intel}-uc.img into /boot — harmless but
+# it breaks UKI-only /boot (hits AMD hosts, where the ucode legitimately exists).
+- name: disable redundant systemd microcode install.d plugins (keep /boot UKI-only)
+  file:
+    src: /dev/null
+    dest: "{{ chroot_dir }}/etc/kernel/install.d/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - 35-amd-microcode-systemd.install
+    - 35-intel-microcode-systemd.install
+
 # Feed the bzImage straight from the source tree (NOT /boot) so kernel-install
 # builds+registers the UKI without ever dropping a loose vmlinuz/System.map/config
 # in /boot. dracut bundles the (now host-only) microcode into the UKI. Net: /boot
