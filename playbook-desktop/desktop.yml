@@ -15,6 +15,22 @@
     - config.yml
 
   tasks:
+    # Re-detect GPU (base preflight facts don't carry over to this play)
+    - name: identify GPU
+      shell: "lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true"
+      register: gpu_lspci
+      changed_when: false
+
+    - name: set video_cards fact
+      set_fact:
+        video_cards: >-
+          {%- set out = gpu_lspci.stdout | default('') -%}
+          {%- set parts = [] -%}
+          {%- if 'AMD' in out or 'ATI' in out or 'Advanced Micro Devices' in out -%}{%- set _ = parts.extend(['amdgpu', 'radeonsi']) -%}{%- endif -%}
+          {%- if 'Intel' in out -%}{%- set _ = parts.append('intel') -%}{%- endif -%}
+          {%- if 'NVIDIA' in out -%}{%- set _ = parts.append('nvidia') -%}{%- endif -%}
+          {{ parts | join(' ') }}
+
     - import_tasks: tasks/00-greetd.yml
     - import_tasks: tasks/01-dotfiles.yml
     - import_tasks: tasks/02-dwl.yml

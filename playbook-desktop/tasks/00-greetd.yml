@@ -38,6 +38,20 @@
   register: greetd_groups
   changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
 
+# wlroots 0.18 needs GBM backend + GLVND dispatch + SW cursor (NVIDIA KMS has no
+# HW cursor planes). greetd reads /etc/environment via pam_env before launching the
+# session, so these reach dwl without needing a login shell.
+- name: write NVIDIA Wayland env vars (NVIDIA GPU only)
+  blockinfile:
+    path: /etc/environment
+    create: true
+    marker: "# {mark} NVIDIA WAYLAND"
+    block: |
+      GBM_BACKEND=nvidia-drm
+      __GLX_VENDOR_LIBRARY_NAME=nvidia
+      WLR_NO_HARDWARE_CURSORS=1
+  when: "'nvidia' in video_cards"
+
 - name: Enable greetd as a runit service (symlink into /service)
   file:
     src: /etc/sv/greetd
