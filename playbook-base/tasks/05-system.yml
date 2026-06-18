@@ -69,6 +69,26 @@
     - swap_size_mib | int > 0
 
 #########################################
+# kernel sysctl tunables
+#########################################
+# overcommit_memory=1 (always overcommit): the default heuristic (0) refuses a
+# single huge malloc *before* swap is consulted, which aborts memory-heavy
+# source builds with std::bad_alloc even when swap is free. The classic victim
+# is dev-lang/zig (the ~50-60 GB single zig2.c translation unit). Mode 1 lets
+# the allocation through and spills overflow to swap. Tradeoff: genuine
+# RAM+swap exhaustion now triggers the OOM killer instead of a clean failure.
+# Applied at boot by the runit rc/1.08-sysctl.sh script (scans /etc/sysctl.d).
+- name: write /etc/sysctl.d/99-overcommit.conf (allow overcommit for big builds)
+  copy:
+    dest: "{{ chroot_dir }}/etc/sysctl.d/99-overcommit.conf"
+    mode: "0644"
+    content: |
+      # Always overcommit so large single allocations (e.g. compiling
+      # dev-lang/zig's zig2.c) succeed and spill to swap instead of
+      # aborting with std::bad_alloc under vm.overcommit_memory=0.
+      vm.overcommit_memory = 1
+
+#########################################
 # root password set
 #########################################
 - name: set root password

@@ -23,6 +23,14 @@
       auth-polkit=false
   when: network_stack == "networkmanager"
 
+# nvidia-drivers builds its kernel module against /usr/src/linux (compiled in 06-kernel.yml).
+# Must emerge before first boot so the module is present for the installed kernel.
+- name: install nvidia-drivers (NVIDIA GPU only)
+  command: '{{ in_chroot }} "emerge --quiet-build x11-drivers/nvidia-drivers"'
+  when: "'nvidia' in video_cards"
+  async: 3600
+  poll: 30
+
 - name: set XDG_RUNTIME_DIR for shell
   copy:
     src: profile.d/xdg-runtime-dir.sh

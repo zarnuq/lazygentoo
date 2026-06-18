@@ -9,8 +9,8 @@
 target_disk: "/dev/nvme0n1"
 
 # Partition sizes in MB (for single boot)
-efi_size_mib: 1028       # EFI System Partition /boot
-swap_size_mib: 8192      # set to 0 to skip swap
+efi_size_mib: 1028   # EFI System Partition /boot
+swap_size_mib: 16000 # set to 0 to skip swap
 
 #############
 # DUAL BOOT #
@@ -28,7 +28,7 @@ root_part_override: "/dev/nvme0n1p6"    # Linux root (ext4)
 # ENCRYPTION OPTIONS #
 ######################
 
-fde_enable: true
+fde_enable: false 
 luks_name: "cryptroot"
 luks_cipher: "aes-xts-plain64"
 luks_key_size: 512
@@ -166,7 +166,7 @@ use_flags:
 ###################
 
 # networking options
-network_stack: "networkmanager"   # networkmanager | dhcpcd
+network_stack: "dhcpcd"   # networkmanager | dhcpcd
 
 # check ./files/runit/sv for list of services that you can enable
 runit_services:

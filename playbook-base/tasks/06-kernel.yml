@@ -23,7 +23,7 @@
 - name: make root kernel cmdline
   set_fact:
     root_cmdline: >-
-      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype={{ root_fs }} rw quiet loglevel=3 preempt=full init=/usr/bin/runit-init
+      {{ ('rd.luks.uuid=' ~ luks_uuid ~ ' ') if fde_enable else '' }}root=UUID={{ root_uuid }} rootfstype={{ root_fs }} rw quiet loglevel=3 preempt=full init=/usr/bin/runit-init{{ ' nvidia-drm.modeset=1' if 'nvidia' in video_cards else '' }}
 
 - name: write kernel cmdline
   copy:

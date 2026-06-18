@@ -1,0 +1,4 @@
+# nvidia-drm.modeset=1 is in the kernel cmdline (06-kernel.yml); wayland USE
+# enables GBM/EGL for wlroots. uvm is CUDA unified memory. -tools drops the
+# nvidia-settings GTK app (not wanted in a dwl/minimal setup).
+x11-drivers/nvidia-drivers modules uvm wayland -tools
