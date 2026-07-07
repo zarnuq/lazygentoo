@@ -1,25 +1,18 @@
 ---
-###############
-# install nix #
-###############
-- name: check if nix is already installed
-  stat:
-    path: /nix/var/nix/profiles/default/bin/nix-daemon
-  register: nix_check
-
-- name: download nix installer
-  get_url:
-    url: https://nixos.org/nix/install
-    dest: /tmp/nix-install.sh
-    mode: "0755"
-  when: not nix_check.stat.exists
-
-- name: Run Nix installer (multi-user / --daemon)
-  command: /tmp/nix-install.sh --daemon --yes
-  args:
-    creates: /nix/var/nix/profiles/default/bin/nix-daemon
-  when: not nix_check.stat.exists
-
+###############################################################
+# nix is installed via sys-apps/nix (BAKED, from nix-guix-gentoo)
+# — no upstream curl|sh installer. This task only layers on the
+# nix.conf tweaks, the runit daemon, and the per-user
+# home-manager setup (channels + install + switch).
+#
+# Paths verified against sys-apps/nix: daemon at
+# /nix/var/nix/profiles/default/bin/nix-daemon (the baked runit sv
+# already targets it), profile script at
+# /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh. The
+# ebuild also ships /etc/profile.d/nix.sh (USE=etc-profile) that
+# auto-sources for login shells, so the zshenv line below is a
+# fallback for the USE=-etc-profile case.
+###############################################################
 - name: configure /etc/nix/nix.conf
   blockinfile:
     path: /etc/nix/nix.conf

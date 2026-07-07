@@ -1,7 +1,0 @@
-#!/bin/sh
-exec 2>&1
-# Use symbolic names; sys-apps/dbus's ebuild creates the messagebus
-# user/group at install time. Hardcoded uid/gid 22 matches Gentoo's
-# current numbering but is brittle across distros / future renumbering.
-[ ! -d /run/dbus ] && install -m755 -g messagebus -o messagebus -d /run/dbus
-exec dbus-daemon --system --nofork --nopidfile

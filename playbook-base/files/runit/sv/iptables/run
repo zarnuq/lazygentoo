@@ -1,9 +1,0 @@
-#!/bin/sh
-# Stateless firewall loader. iptables-restore exits after applying rules,
-# so we then `chpst -b iptables pause` to keep runsv from respawning
-# (the matching finish script flushes on stop). Mirrors the ufw pattern.
-exec 2>&1
-set -e
-[ -r /etc/iptables/rules.v4 ] && /sbin/iptables-restore /etc/iptables/rules.v4
-[ -r /etc/iptables/rules.v6 ] && /sbin/ip6tables-restore /etc/iptables/rules.v6
-exec chpst -b iptables pause

@@ -1,9 +1,0 @@
-#!/bin/sh
-# `-d` keeps chronyd in foreground (runsv needs that); `-u ntp` drops
-# to the unprivileged user the net-misc/chrony ebuild creates — matches
-# Gentoo's OpenRC default of `chronyd -F 2 -u ntp`. -F2 (seccomp filter
-# level 2) is left off to match what other distros' runit scripts ship;
-# add it via OPTS in ./conf if you want it.
-exec 2>&1
-[ -r conf ] && . ./conf
-exec /usr/sbin/chronyd -d -u ntp ${OPTS}

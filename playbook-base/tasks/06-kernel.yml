@@ -67,55 +67,19 @@
       add_dracutmodules+=" crypt dm rootfs-block "
   when: fde_enable
 
-- name: install cryptsetup ahead of kernel build (FDE only)
-  command: >
-    {{ in_chroot }}
-    "emerge --quiet-build sys-fs/cryptsetup"
-  when: fde_enable
-
-- name: install firmware, UKI toolchain, installkernel, kernel build deps
-  command: >
-    {{ in_chroot }}
-    "emerge --quiet-build --newuse sys-kernel/linux-firmware sys-kernel/installkernel sys-kernel/dracut sys-apps/systemd-utils sys-boot/efibootmgr {{ kernel_build_deps | join(' ') }}"
-  async: 3600
-  poll: 30
+# NOTE: the kernel (sys-kernel/gentoo-sources, compiled with files/kernel/config
+# in the stage4 fsscript), dracut, installkernel, efibootmgr, linux-firmware,
+# systemd-utils, and cryptsetup are all BAKED into the stage4 tarball. Only the
+# host-specific UKI assembly (cmdline + hostonly initramfs + efibootmgr) remains.
 
 - name: install intel microcode
   command: '{{ in_chroot }} "emerge --quiet-build sys-firmware/intel-microcode"'
   when: cpu_microcode == "intel"
 
-- name: install kernel source tree (USE=symlink -> /usr/src/linux)
-  command: '{{ in_chroot }} "emerge --quiet-build --noreplace sys-kernel/gentoo-sources"'
-  async: 1800
-  poll: 30
-
-# Ship a validated .config (files/kernel/config). It builds storage/fs/crypt and
-# the EFI framebuffer BUILTIN (nvme, ext4, dm-crypt, fb_efi/sysfb) so the kernel
-# sees the disk and shows the LUKS prompt with no initramfs gymnastics. olddefconfig
-# absorbs any version drift between the shipped config and the emerged source.
-- name: install kernel .config
-  copy:
-    src: kernel/config
-    dest: "{{ chroot_dir }}/usr/src/linux/.config"
-    mode: "0644"
-
-- name: adapt .config to the emerged source (non-interactive)
-  command: '{{ in_chroot }} "make -C /usr/src/linux olddefconfig"'
-
-- name: compile the kernel
-  command: '{{ in_chroot }} "make -C /usr/src/linux {{ makeopts_effective }}"'
-  async: 3600
-  poll: 30
-
-# INSTALL_MOD_STRIP=1 strips DWARF debug info from each .ko at install time.
-# DEBUG_INFO=y is needed to *generate* BTF, but the leftover DWARF in the modules
-# is dead weight at boot (~592M -> ~70M module tree). strip --strip-debug keeps the
-# .BTF section, so BTF/CO-RE still works; it just sheds the DWARF that was bloating
-# the hostonly initramfs (and thus the UKI's .initrd section).
-- name: install kernel modules
-  command: '{{ in_chroot }} "make -C /usr/src/linux INSTALL_MOD_STRIP=1 modules_install"'
-  async: 1800
-  poll: 30
+# NOTE: the kernel is BAKED — sys-kernel/gentoo-sources is emerged and compiled
+# with files/kernel/config in the stage4 fsscript (make + INSTALL_MOD_STRIP=1
+# modules_install), so the tarball ships /usr/src/linux with a built bzImage and
+# /lib/modules. No compile at install; the UKI step below just assembles it.
 
 - name: write kernel-install / UKI config
   copy:
@@ -153,11 +117,11 @@
     - 35-amd-microcode-systemd.install
     - 35-intel-microcode-systemd.install
 
-# Feed the bzImage straight from the source tree (NOT /boot) so kernel-install
-# builds+registers the UKI without ever dropping a loose vmlinuz/System.map/config
-# in /boot. dracut bundles the (now host-only) microcode into the UKI. Net: /boot
-# holds only EFI/Linux/<token>-<kver>.efi.
-- name: build + register UKI (kernel-install) from the source bzImage
+# Feed the baked bzImage from the source tree (NOT /boot) so kernel-install
+# builds+registers the UKI without dropping a loose vmlinuz in /boot. dracut
+# (hostonly, per 00-lean.conf above) bundles this host's microcode + drivers.
+# Net: /boot holds only EFI/Linux/<token>-<kver>.efi.
+- name: build + register UKI (kernel-install) from the baked source bzImage
   command: >
     {{ in_chroot }}
     "kver=$(make -s -C /usr/src/linux kernelrelease); kernel-install add \"$kver\" /usr/src/linux/arch/x86/boot/bzImage"

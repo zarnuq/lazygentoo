@@ -1,7 +1,0 @@
-#!/bin/sh
-# tlp is not a daemon: `tlp start` writes power policy to sysfs and its udev
-# rules handle AC<->battery transitions. Apply the profile once at boot, then
-# idle so runsv keeps the slot supervised (nothing to hold in the foreground).
-exec 2>&1
-/usr/sbin/tlp start
-exec sleep infinity

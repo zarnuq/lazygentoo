@@ -39,7 +39,7 @@
     - import_tasks: tasks/04-portage.yml
     - import_tasks: tasks/05-system.yml
     - import_tasks: tasks/06-kernel.yml
-    - import_tasks: tasks/08-base-pkgs.yml
-    - import_tasks: tasks/09-runit.yml
-    - import_tasks: tasks/10-users.yml
+    - import_tasks: tasks/07-base-pkgs.yml
+    - import_tasks: tasks/08-runit.yml
+    - import_tasks: tasks/09-users.yml
     - import_tasks: tasks/99-finish.yml

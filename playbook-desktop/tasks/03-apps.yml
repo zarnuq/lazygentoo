@@ -2,33 +2,12 @@
 ###############################
 # manage and install overlays #
 ###############################
-- name: install eselect-repository
-  command: emerge --quiet-build --noreplace app-eselect/eselect-repository
-
-- name: enable the ::guru
-  command: eselect repository enable guru
-  register: guru_enable
-  changed_when: "'Overlay \"guru\" already enabled' not in (guru_enable.stderr | default(''))"
-  failed_when:
-    - guru_enable.rc != 0
-    - "'already enabled' not in (guru_enable.stderr | default(''))"
-
-- name: sync the ::guru overlay
+# ::guru and ::edgets repo config (repos.conf) + guru ~amd64 keywords are BAKED
+# into the stage4. Only the tree sync remains before we can emerge from them.
+- name: sync ::guru overlay
   command: emaint sync -r guru
 
-- name: accept ~amd64 keywords for anything in ::guru
-  copy:
-    src: portage/package.accept_keywords/guru
-    dest: /etc/portage/package.accept_keywords/guru
-    mode: "0644"
-
-- name: register the ::edgets
-  copy:
-    src: portage/repos.conf/edgets.conf
-    dest: /etc/portage/repos.conf/edgets.conf
-    mode: "0644"
-
-- name: sync the ::edgets
+- name: sync ::edgets overlay
   command: emaint sync -r edgets
 
 - name: accept ~amd64 keywords for each apps_packages atom

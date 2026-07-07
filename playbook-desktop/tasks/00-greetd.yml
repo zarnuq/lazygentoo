@@ -1,25 +1,21 @@
 ---
-###################
-# install greeter #
-###################
-- name: install greetd, tuigreet
-  command: emerge --quiet-build --noreplace gui-libs/greetd gui-apps/tuigreet
-  async: 3600
-  poll: 30
+###########################################################
+# greetd host tweaks — install/config/enable are all BAKED #
+# into the stage4 (gui-libs/greetd + gui-apps/tuigreet,    #
+# /etc/greetd/config.toml, /service/greetd). Only the      #
+# runtime + host-specific bits remain here.                #
+###########################################################
 
-- name: make sure greetd config dir exists
-  file:
-    path: /etc/greetd
-    state: directory
-    mode: "0755"
+- name: add greetd user to groups (seat/tty/input for session launch)
+  command: gpasswd -a greetd {{ item }}
+  loop:
+    - seat
+    - tty
+    - input
+  register: greetd_groups
+  changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
 
-- name: write greetd config
-  template:
-    src: greetd-config.toml.j2
-    dest: /etc/greetd/config.toml
-    mode: "0644"
-
-- name: ensure tuigreet cache dir exists
+- name: ensure tuigreet cache dir exists (--remember)
   file:
     path: /var/cache/tuigreet
     state: directory
@@ -29,18 +25,10 @@
   command: chown greetd:greetd /var/cache/tuigreet
   changed_when: false
 
-- name: add greetd user to groups
-  command: gpasswd -a greetd {{ item }}
-  loop:
-    - seat
-    - tty
-    - input
-  register: greetd_groups
-  changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
-
-# wlroots 0.18 needs GBM backend + GLVND dispatch + SW cursor (NVIDIA KMS has no
-# HW cursor planes). greetd reads /etc/environment via pam_env before launching the
-# session, so these reach dwl without needing a login shell.
+# river/wlroots needs GBM backend + GLVND dispatch + SW cursor on NVIDIA (KMS has
+# no HW cursor planes). greetd reads /etc/environment via pam_env before launching
+# the session, so these reach the WM without a login shell. Host-specific (NVIDIA),
+# so it can't be baked into a shared image.
 - name: write NVIDIA Wayland env vars (NVIDIA GPU only)
   blockinfile:
     path: /etc/environment
@@ -51,11 +39,3 @@
       __GLX_VENDOR_LIBRARY_NAME=nvidia
       WLR_NO_HARDWARE_CURSORS=1
   when: "'nvidia' in video_cards"
-
-- name: Enable greetd as a runit service (symlink into /service)
-  file:
-    src: /etc/sv/greetd
-    dest: /service/greetd
-    state: link
-    follow: false
-    force: yes

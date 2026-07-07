@@ -1,36 +1,27 @@
 ---
-################################################################ 
-# find, download, extract then delete the stage3 desktop tarball
-################################################################ 
-- name: get stage3 tarball filename
-  shell: |
-    set -o pipefail
-    curl -fsSL "{{ gentoo_mirror }}/{{ stage3_pointer }}" \
-      | grep -Eo 'stage3-[A-Za-z0-9._-]+\.tar\.xz' \
-      | head -1
-  args:
-    executable: /bin/bash
-  register: stage3_relpath_cmd
-  changed_when: false
-
-- name: stop if file did not resolve a tarball path
-  fail:
-  when: stage3_relpath_cmd.stdout | trim == ''
-
-- name: assemble stage3 download URL
-  set_fact:
-    stage3_filename: "{{ stage3_relpath_cmd.stdout | trim }}"
-    stage3_url: "{{ gentoo_mirror }}/{{ stage3_pointer | dirname }}/{{ stage3_relpath_cmd.stdout | trim }}"
-
-- name: download stage3 tarball
+################################################################
+# Extract the personalized catalyst stage4 tarball (bakes portage
+# config, the full @world/base+desktop stack, runit, and overlays).
+# Replaces the old upstream stage3 download. Source is config.yml:
+# stage4_tarball — a local path on the controller, or an https:// URL.
+################################################################
+- name: fetch stage4 tarball (URL)
   get_url:
-    url: "{{ stage3_url }}"
-    dest: "{{ chroot_dir }}/{{ stage3_filename }}"
+    url: "{{ stage4_tarball }}"
+    dest: "{{ chroot_dir }}/stage4.tar.xz"
     mode: "0644"
+  when: stage4_tarball is match('^https?://')
 
-- name: extract stage3 tarball
+- name: copy stage4 tarball (local file on controller)
+  copy:
+    src: "{{ stage4_tarball }}"
+    dest: "{{ chroot_dir }}/stage4.tar.xz"
+    mode: "0644"
+  when: not (stage4_tarball is match('^https?://'))
+
+- name: extract stage4 tarball
   command: >
-    tar xpf {{ stage3_filename }}
+    tar xpf stage4.tar.xz
     --xattrs-include='*.*'
     --numeric-owner
     -C {{ chroot_dir }}
@@ -38,7 +29,7 @@
     chdir: "{{ chroot_dir }}"
     creates: "{{ chroot_dir }}/etc/gentoo-release"
 
-- name: delete stage3 tarball
+- name: delete stage4 tarball
   file:
-    path: "{{ chroot_dir }}/{{ stage3_filename }}"
+    path: "{{ chroot_dir }}/stage4.tar.xz"
     state: absent

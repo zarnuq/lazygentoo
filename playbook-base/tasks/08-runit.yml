@@ -1,0 +1,32 @@
+---
+#############################################
+# runit is FULLY baked into the stage4 tarball: the /sbin/init symlink,
+# /etc/runit/{1,2,3,ctrlaltdel,rc.sh,rc/,functions,crypt.awk}, /etc/sv/*,
+# the runit-shutdown/runit-reboot system, /var/log/runit dirs, sshd
+# hardening, sysvinit removal, and enablement of the base services
+# (sysklogd, udevd, sshd, seatd, chronyd, getty-tty1..6) into /service.
+#
+# Only the host-specific bits remain here:
+#   1. /etc/runit/rc.conf identity (hostname/timezone/keymap)
+#   2. enabling the chosen network service into /service
+#############################################
+- name: write /etc/runit/rc.conf
+  copy:
+    dest: "{{ chroot_dir }}/etc/runit/rc.conf"
+    mode: "0644"
+    content: |
+      HOSTNAME="{{ hostname }}"
+      TIMEZONE="{{ timezone }}"
+      HARDWARECLOCK="UTC"
+      KEYMAP="{{ keymap }}"
+
+# base services are baked into /service; the network service is host-choice.
+# /etc/sv/{dhcpcd,dbus,NetworkManager} are all baked, so this just symlinks.
+- name: enable network service ({{ network_stack }})
+  file:
+    src: "/etc/sv/{{ item }}"
+    dest: "{{ chroot_dir }}/service/{{ item }}"
+    state: link
+    follow: false
+    force: yes
+  loop: "{{ ['dbus', 'NetworkManager'] if network_stack == 'networkmanager' else ['dhcpcd'] }}"

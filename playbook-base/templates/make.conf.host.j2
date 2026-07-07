@@ -1,0 +1,30 @@
+# ─── host-specific overrides (appended by lazygentoo) ───────────────────────
+# The personalized/global make.conf (COMMON_FLAGS, USE, CPU_FLAGS baseline, etc.)
+# ships baked into the stage4 tarball. Everything below is per-host and must NOT
+# be baked — it overrides the baked defaults because make.conf is sourced top-down.
+
+# Per-host parallelism: baked value is the bake host's thread count; override to
+# this machine's so a smaller box (e.g. 12-thread laptop) doesn't oversubscribe/OOM.
+MAKEOPTS="{{ makeopts_effective }}"
+
+# GPU is the real hardware difference between machines — detected in 00-preflight.
+VIDEO_CARDS="{{ video_cards }}"
+
+# Runtime portage paths (deliberately absent from the bake, which lets catalyst
+# manage its own tmp/distfiles/pkg dirs).
+PORTAGE_TMPDIR="/var/tmp"
+DISTDIR="/var/cache/distfiles"
+PKGDIR="/var/cache/binpkgs"
+
+# Microcode strip is vendor-specific (Intel laptop => no AMD ucode, and vice
+# versa). Baking this would remove the other vendor's microcode from a shared
+# image — hence per-host. See make.conf.j2 for the ISH-firmware rationale.
+INSTALL_MASK="/boot/System.map* /boot/config* /lib/firmware/*/ish/*{% if cpu_microcode == 'intel' %} /lib/firmware/amd-ucode{% elif cpu_microcode == 'amd' %} /lib/firmware/intel-ucode{% endif %}"
+
+FEATURES="${FEATURES} parallel-install ccache buildpkg"
+CCACHE_DIR="/var/cache/ccache"
+CCACHE_SIZE="15G"
+
+EMERGE_DEFAULT_OPTS="--quiet-build=y --keep-going=y --jobs={{ emerge_jobs_effective }} --load-average={{ (ansible_facts['processor_vcpus'] | int) + 1 }}"
+
+GENTOO_MIRRORS="{{ gentoo_mirror | regex_replace('/releases/.*$', '') }}"

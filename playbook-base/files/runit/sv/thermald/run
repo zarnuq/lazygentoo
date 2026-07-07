@@ -1,5 +1,0 @@
-#!/bin/sh
-# --no-daemon keeps thermald in the foreground (runsv needs that). Intel-only;
-# enabled solely on Intel CPUs (see tasks/09-power.yml).
-exec 2>&1
-exec /usr/sbin/thermald --no-daemon

@@ -17,13 +17,7 @@
         "echo '{{ user_name }}:{{ user_password }}' | chpasswd"
       no_log: true
 
-    - name: allow wheel via doas (password for general use, nopass for power)
-      copy:
-        src: doas.conf
-        dest: "{{ chroot_dir }}/etc/doas.conf"
-        owner: root
-        group: root
-        mode: "0400"
+    # NOTE: /etc/doas.conf (wheel rules) is now BAKED into the stage4 overlay.
 
     - name: check for an authorized_keys file (files/authorized_keys, gitignored)
       stat:
@@ -50,19 +44,3 @@
             {{ in_chroot }}
             "chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}/.ssh"
 
-#############################################
-# make sudo an alias for doas via symlink
-#############################################
-- name: ensure /usr/local/bin exists
-  file:
-    path: "{{ chroot_dir }}/usr/local/bin"
-    state: directory
-    mode: "0755"
-
-- name: symlink sudo -> doas so `sudo <cmd>` runs `doas <cmd>`
-  file:
-    src: /usr/bin/doas
-    dest: "{{ chroot_dir }}/usr/local/bin/sudo"
-    state: link
-    follow: false
-    force: yes

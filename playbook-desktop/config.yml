@@ -1,10 +1,13 @@
 ---
 ##############################################################################
-# Gentoo desktop install (greetd,dwl,dotfiles,apps,themes,shell,nix,firewalls)
-# ansible-playbook -i inventory.ini install.yml
+# Gentoo desktop layer (dotfiles, apps, themes, shell, nix, power)
+# ansible-playbook -i inventory.ini desktop.yml
+#
+# NOTE: the WM (river + reach), greetd + its config, tuigreet, kitty, rofi-wayland,
+# nftables + ruleset, xdg-desktop-portal(-wlr), and noto fonts are all BAKED into
+# the stage4 tarball. This layer only adds the non-baked apps/dotfiles/theming and
+# the host-specific greetd NVIDIA env tweak.
 ##############################################################################
-
-greetd_cmd: "dbus-run-session /home/{{ user_name }}/.local/src/dwl/dwl"
 
 # dotfiles repo and dir to stow
 dotfiles_repo: "https://github.com/zarnuq/dotfiles"
@@ -33,24 +36,6 @@ home_premkdir:
   - .zen
   - Documents
 
-# dwl deps to build and make cmds (all .local/src)
-dwl_build_dirs:
-  - { name: dwl,        build_args: "clean all" }
-  - { name: dwlb,       build_args: "clean all" }
-  - { name: someblocks, build_args: "" }
-
-# dwl deps
-dwl_build_deps:
-  - "=gui-libs/wlroots-0.18*"
-  - dev-libs/libinput
-  - x11-libs/libxkbcommon
-  - x11-libs/pixman
-  - dev-libs/wayland
-  - dev-libs/wayland-protocols
-  - x11-base/xwayland
-  - media-libs/fcft
-  - dev-libs/tllist
-
 # audio deps
 audio_packages:
   - media-video/pipewire
@@ -60,7 +45,6 @@ audio_packages:
 # list of apps to make my "de"
 apps_packages:
   # shell + CLI tooling
-  - app-shells/zsh
   - app-shells/bash-completion
   - app-shells/fzf
   - app-shells/zoxide
@@ -81,7 +65,7 @@ apps_packages:
   # editors
   - app-editors/neovim
 
-  # Wayland + dwl ecosystem
+  # Wayland ecosystem (river) — rofi-wayland + xdg-desktop-portal(-wlr) are BAKED
   - gui-apps/mako
   - x11-misc/gammastep
   - gui-apps/qt6ct
@@ -92,13 +76,10 @@ apps_packages:
   - gui-apps/wl-clipboard
   - app-misc/brightnessctl      # ::guru
   - gui-apps/wlr-randr          # ::guru
-  - gui-apps/rofi-wayland       # ::guru
   - gui-apps/eww                # ::guru
   - gui-apps/awww               # ::guru
   - gui-apps/satty              # ::guru
   - gui-apps/wl-clip-persist    # ::guru
-  - sys-apps/xdg-desktop-portal
-  - gui-libs/xdg-desktop-portal-wlr
 
   # media
   - media-video/mpv
@@ -110,14 +91,12 @@ apps_packages:
   - media-gfx/imagemagick
   - media-gfx/loupe
 
-  # terminals + docs
-  - x11-terms/kitty
+  # terminals + docs (kitty is BAKED)
   - app-text/zathura
   - app-text/zathura-pdf-poppler
 
-  # fonts
+  # fonts (noto + noto-emoji are BAKED; CJK is not)
   - media-fonts/noto-cjk
-  - media-fonts/noto-emoji
 
   # programming
   - dev-lang/lua
@@ -126,9 +105,8 @@ apps_packages:
   # python
   - dev-python/icalendar
 
-  # network / VPN / firewall / storage
+  # network / VPN / storage (nftables is BAKED)
   - net-vpn/openvpn
-  - net-firewall/nftables
   - sys-fs/udisks
   - net-p2p/syncthing
 
@@ -138,16 +116,10 @@ apps_packages:
   # messaging
   - net-im/signal-desktop-bin
 
-# inbound ports to open in the nftables firewall (rendered into /etc/nftables.conf
-# by tasks/08-firewall.yml via templates/nftables.conf.j2). Default-deny inbound.
-firewall_allowed_tcp_ports:
-  - 22
-firewall_allowed_udp_ports: []
-
 power_packages:
   - sys-power/acpid       # ACPI events -> lid-close suspend
   - sys-power/tlp         # CPU/PCIe/USB power tuning (intel_pstate + amd_pstate)
-  - gui-apps/swayidle     # idle hook -> swaylock (wire into your dwl autostart)
+  - gui-apps/swayidle     # idle hook -> swaylock (wire into your river autostart)
 power_packages_intel:
   - sys-power/thermald    # Intel-only thermal daemon
 

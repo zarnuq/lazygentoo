@@ -1,6 +1,6 @@
 ---
 ##################################################
-# Gentoo desktop layer (greetd + dwl + pipeWire)
+# Gentoo desktop layer (river baked; apps + dotfiles + theming + pipewire)
 #   ansible-playbook -i inventory.ini desktop.yml
 ##################################################
 
@@ -31,13 +31,10 @@
           {%- if 'NVIDIA' in out -%}{%- set _ = parts.append('nvidia') -%}{%- endif -%}
           {{ parts | join(' ') }}
 
-    - import_tasks: tasks/00-greetd.yml
+    - import_tasks: tasks/00-greetd.yml   # host tweaks only (install/config baked)
     - import_tasks: tasks/01-dotfiles.yml
-    - import_tasks: tasks/02-dwl.yml
-    - import_tasks: tasks/03-audio.yml
-    - import_tasks: tasks/04-apps.yml
-    - import_tasks: tasks/05-theme.yml
-    - import_tasks: tasks/06-shell.yml
-    - import_tasks: tasks/07-nix.yml
-    - import_tasks: tasks/08-firewall.yml
-    - import_tasks: tasks/09-power.yml
+    - import_tasks: tasks/02-audio.yml
+    - import_tasks: tasks/03-apps.yml
+    - import_tasks: tasks/04-theme.yml
+    - import_tasks: tasks/05-nix.yml
+    - import_tasks: tasks/06-power.yml

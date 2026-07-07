@@ -1,102 +1,46 @@
 ---
 #########################################
-# set portage conf, overides, repos, profiles, etc
+# The stage4 tarball bakes the entire portage config: global make.conf
+# (COMMON_FLAGS, USE, ABI, CPU_FLAGS baseline), profile, package.use,
+# package.env, env/, package.accept_keywords, package.mask, the overlay
+# repos.conf, AND the full @world. So this task only:
+#   1. appends the per-host make.conf overrides
+#   2. ensures ::gentoo is defined + syncs an ebuild tree (stages ship none)
 #########################################
-- name: write make.conf
-  template:
-    src: make.conf.j2
-    dest: "{{ chroot_dir }}/etc/portage/make.conf"
+# make.conf is sourced top-down, so appended host values win over the baked
+# defaults (MAKEOPTS, VIDEO_CARDS, microcode INSTALL_MASK, runtime paths).
+- name: assert stage4 baked make.conf is present
+  stat:
+    path: "{{ chroot_dir }}/etc/portage/make.conf"
+  register: baked_makeconf
+
+- name: fail if baked make.conf missing (personalized stage4 tarball expected)
+  fail:
+    msg: >-
+      No /etc/portage/make.conf in the extracted stage. This playbook now expects
+      the personalized stage4 tarball to provide the global make.conf. Check that
+      tasks/02-stage3.yml extracted the stage4 build, not a bare upstream stage3.
+  when: not baked_makeconf.stat.exists
+
+- name: append host-specific make.conf overrides
+  blockinfile:
+    path: "{{ chroot_dir }}/etc/portage/make.conf"
+    marker: "# {mark} LAZYGENTOO HOST OVERRIDES"
+    block: "{{ lookup('template', 'make.conf.host.j2') }}"
     owner: root
     group: root
     mode: "0644"
 
-- name: check portage config dirs exist
-  file:
-    path: "{{ chroot_dir }}/etc/portage/{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  loop:
-    - package.use
-    - package.accept_keywords
-    - package.license
-    - repos.conf
-    - binrepos.conf
-    - env
-
-- name: config gentoo repo (rsync)
-  copy:
-    src: portage/repos.conf/gentoo.conf
-    dest: "{{ chroot_dir }}/etc/portage/repos.conf/gentoo.conf"
-    mode: "0644"
-
-- name: config gentoo binary package host
-  copy:
-    src: portage/binrepos.conf/gentoobinhost.conf
-    dest: "{{ chroot_dir }}/etc/portage/binrepos.conf/gentoobinhost.conf"
-    mode: "0644"
-
+# The stage4 now ships ALL repos.conf (::gentoo hardened config + the overlays),
+# but catalyst stages carry NO ebuild repo — so we still sync a tree here.
 - name: pull initial portage tree
   command: '{{ in_chroot }} "emerge-webrsync"'
   args:
     creates: "{{ chroot_dir }}/var/db/repos/gentoo/profiles/repo_name"
 
-- name: select profile
-  command: '{{ in_chroot }} "eselect profile set {{ gentoo_profile }}"'
-  register: profile_set
-  changed_when: "'now set' in profile_set.stdout or 'set to' in profile_set.stdout"
-
-- name: install cpuid2cpuflags (for accurate CPU_FLAGS_X86)
-  command: '{{ in_chroot }} "emerge --quiet-build app-portage/cpuid2cpuflags"'
-  args:
-    creates: "{{ chroot_dir }}/usr/bin/cpuid2cpuflags"
-
-- name: detect CPU flags
-  command: '{{ in_chroot }} "cpuid2cpuflags"'
-  register: cpuid_out
-  changed_when: false
-
-- name: append CPU_FLAGS_X86 to make.conf
-  lineinfile:
-    path: "{{ chroot_dir }}/etc/portage/make.conf"
-    regexp: '^CPU_FLAGS_X86='
-    line: "CPU_FLAGS_X86=\"{{ cpuid_out.stdout.split(': ')[1] | default('') }}\""
-    state: present
-
-- name: add package USE overrides
-  copy:
-    src: portage/package.use/
-    dest: "{{ chroot_dir }}/etc/portage/package.use/"
-    mode: "0644"
-
-# per-package CFLAGS overrides (no-LTO pins) — must land before the source
-# @world build so LTO-hostile packages don't abort it
-- name: add per-package env files
-  copy:
-    src: portage/env/
-    dest: "{{ chroot_dir }}/etc/portage/env/"
-    mode: "0644"
-
-- name: add package.env (maps packages to env overrides)
-  copy:
-    src: portage/package.env
-    dest: "{{ chroot_dir }}/etc/portage/package.env"
-    mode: "0644"
-
-# scoped binhost: bring binhost_packages to the target version+USE from binpkg so
-# the @world below finds them satisfied and doesn't recompile. --update --newuse
-# (not --noreplace) so they actually replace the older stage3 toolchain.
-- name: pull whitelisted packages from binhost
-  command: >
-    {{ in_chroot }} "emerge --quiet-build --getbinpkg --usepkg --update --newuse
-    {{ binhost_packages | join(' ') }}"
-  when: binhost_packages | length > 0
-  async: 7200
-  poll: 30
-
-# world update (source build; binhost not used here)
-- name: update @world to use new profile/USE flags
-  command: '{{ in_chroot }} "emerge --quiet-build --update --deep --newuse --with-bdeps=y @world"'
-  async: 14400
-  poll: 30
+# NOTE: profile selection, package.use/env, CPU_FLAGS detection, the binhost
+# toolchain pull, and the full @world build were all REMOVED here — they're
+# baked into the stage4. Re-running @world at install would recompile against
+# any tree drift since the bake and defeat the whole point. CPU_FLAGS stays at
+# the baked v3 intersection on purpose (re-detecting a fuller set would trigger
+# rebuilds). To pick up updates later, run manually: `emerge -uDN @world`.

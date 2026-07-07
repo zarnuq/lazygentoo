@@ -1,2 +1,0 @@
-sys-kernel/installkernel dracut -grub -systemd-boot
-sys-kernel/gentoo-sources symlink
