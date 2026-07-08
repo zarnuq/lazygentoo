@@ -2,22 +2,11 @@
 ###############################
 # manage and install overlays #
 ###############################
-# ::guru and ::edgets repo config (repos.conf) + guru ~amd64 keywords are BAKED
-# into the stage4. Only the tree sync remains before we can emerge from them.
-- name: sync ::guru overlay
-  command: emaint sync -r guru
-
+# ::edgets repo config (repos.conf) is baked; only its tree sync remains, needed
+# for zen-browser. ::guru sync is gone — every guru app is now baked, and the
+# remaining apps come from edgets (zen) or ::gentoo (signal, noto-cjk).
 - name: sync ::edgets overlay
   command: emaint sync -r edgets
-
-- name: accept ~amd64 keywords for each apps_packages atom
-  copy:
-    dest: /etc/portage/package.accept_keywords/apps
-    mode: "0644"
-    content: |
-      {% for pkg in apps_packages %}
-      {{ pkg }} ~amd64
-      {% endfor %}
 
 - name: install desktop apps
   command: >

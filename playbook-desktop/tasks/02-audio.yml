@@ -1,14 +1,8 @@
 ---
 ###############################################
-# install pipewire, make mpd dirs, get pweq EQ #
+# mpd dirs + pweq EQ. The PipeWire stack (pipewire/wireplumber/pavucontrol) is
+# BAKED into the stage4 tarball, so there's no install step here anymore.
 ###############################################
-- name: install PipeWire stack
-  command: >
-    emerge --quiet-build --noreplace
-    {{ audio_packages | join(' ') }}
-  async: 3600
-  poll: 30
-
 - name: create mpd data directory
   file:
     path: "/home/{{ user_name }}/.local/share/mpd"

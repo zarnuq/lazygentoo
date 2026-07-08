@@ -1,9 +1,16 @@
 ---
 #########################################
-# The stage4 tarball bakes the entire portage config: global make.conf
-# (COMMON_FLAGS, USE, ABI, CPU_FLAGS baseline), profile, package.use,
-# package.env, env/, package.accept_keywords, package.mask, the overlay
-# repos.conf, AND the full @world. So this task only:
+# The stage4 tarball bakes the entire portage config. IMPORTANT: catalyst only
+# writes COMMON_FLAGS/CFLAGS/CHOST into /etc/portage/make.conf — it IGNORES USE,
+# CPU_FLAGS_X86, LLVM_TARGETS, ACCEPT_LICENSE/KEYWORDS, INPUT_DEVICES, L10N in the
+# confdir make.conf. So the real global config lives ELSEWHERE in the baked
+# /etc/portage (all honored by portage automatically at runtime):
+#   - profile/make.defaults   -> USE, CPU_FLAGS_X86, LLVM_TARGETS, INPUT_DEVICES, L10N
+#   - package.license         -> ACCEPT_LICENSE  ('*/* *')
+#   - package.accept_keywords -> ~amd64 keywords
+#   - package.use/, package.env, env/, the overlay repos.conf, AND the full @world
+# So the installed /etc/portage/make.conf is SPARSE by design (COMMON_FLAGS/CHOST
+# + our host block); `emerge --info` shows the full resolved USE. This task only:
 #   1. appends the per-host make.conf overrides
 #   2. ensures ::gentoo is defined + syncs an ebuild tree (stages ship none)
 #########################################
@@ -21,6 +28,23 @@
       the personalized stage4 tarball to provide the global make.conf. Check that
       tasks/02-stage3.yml extracted the stage4 build, not a bare upstream stage3.
   when: not baked_makeconf.stat.exists
+
+# The global USE/CPU_FLAGS/LLVM_TARGETS do NOT live in make.conf (catalyst drops
+# them) — they live in profile/make.defaults. Its absence means the tarball was
+# built without the confdir profile, i.e. global USE is wrong -> refuse to proceed.
+- name: assert baked global USE config is present (profile/make.defaults)
+  stat:
+    path: "{{ chroot_dir }}/etc/portage/profile/make.defaults"
+  register: baked_makedefaults
+
+- name: fail if baked make.defaults missing (global USE/CPU_FLAGS not baked)
+  fail:
+    msg: >-
+      No /etc/portage/profile/make.defaults in the extracted stage. Catalyst does
+      not bake USE/CPU_FLAGS_X86/LLVM_TARGETS into make.conf — they live in
+      profile/make.defaults. Its absence means this stage4 was built without the
+      confdir profile and its global USE is wrong. Rebuild the stage4.
+  when: not baked_makedefaults.stat.exists
 
 - name: append host-specific make.conf overrides
   blockinfile:

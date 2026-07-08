@@ -5,30 +5,6 @@
 # /etc/greetd/config.toml, /service/greetd). Only the      #
 # runtime + host-specific bits remain here.                #
 ###########################################################
-
-- name: add greetd user to groups (seat/tty/input for session launch)
-  command: gpasswd -a greetd {{ item }}
-  loop:
-    - seat
-    - tty
-    - input
-  register: greetd_groups
-  changed_when: "'Adding user' in (greetd_groups.stdout | default(''))"
-
-- name: ensure tuigreet cache dir exists (--remember)
-  file:
-    path: /var/cache/tuigreet
-    state: directory
-    mode: "0755"
-
-- name: chown tuigreet cache dir
-  command: chown greetd:greetd /var/cache/tuigreet
-  changed_when: false
-
-# river/wlroots needs GBM backend + GLVND dispatch + SW cursor on NVIDIA (KMS has
-# no HW cursor planes). greetd reads /etc/environment via pam_env before launching
-# the session, so these reach the WM without a login shell. Host-specific (NVIDIA),
-# so it can't be baked into a shared image.
 - name: write NVIDIA Wayland env vars (NVIDIA GPU only)
   blockinfile:
     path: /etc/environment

@@ -1,7 +1,9 @@
 # ─── host-specific overrides (appended by lazygentoo) ───────────────────────
-# The personalized/global make.conf (COMMON_FLAGS, USE, CPU_FLAGS baseline, etc.)
-# ships baked into the stage4 tarball. Everything below is per-host and must NOT
-# be baked — it overrides the baked defaults because make.conf is sourced top-down.
+# The baked make.conf carries only COMMON_FLAGS/CFLAGS/CHOST (catalyst drops the
+# rest); global USE/CPU_FLAGS_X86/LLVM_TARGETS live in the baked
+# profile/make.defaults, licenses in package.license, keywords in
+# package.accept_keywords. Everything below is per-host and must NOT be baked —
+# it overrides the baked defaults because make.conf is sourced top-down.
 
 # Per-host parallelism: baked value is the bake host's thread count; override to
 # this machine's so a smaller box (e.g. 12-thread laptop) doesn't oversubscribe/OOM.

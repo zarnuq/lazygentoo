@@ -67,10 +67,17 @@
       add_dracutmodules+=" crypt dm rootfs-block "
   when: fde_enable
 
+# cryptsetup is NOT baked (LUKS-only). Install it here on FDE hosts — dracut's
+# crypt module copies the cryptsetup binary into the initramfs, so it must be
+# present before the UKI build below. Non-FDE hosts never get it (no leftover).
+- name: install cryptsetup (FDE only)
+  command: '{{ in_chroot }} "emerge --quiet-build --noreplace sys-fs/cryptsetup"'
+  when: fde_enable
+
 # NOTE: the kernel (sys-kernel/gentoo-sources, compiled with files/kernel/config
-# in the stage4 fsscript), dracut, installkernel, efibootmgr, linux-firmware,
-# systemd-utils, and cryptsetup are all BAKED into the stage4 tarball. Only the
-# host-specific UKI assembly (cmdline + hostonly initramfs + efibootmgr) remains.
+# in the stage4 fsscript), dracut, installkernel, efibootmgr, linux-firmware, and
+# systemd-utils are BAKED into the stage4 tarball. cryptsetup is installed above
+# only when fde_enable. Only the host-specific UKI assembly remains.
 
 - name: install intel microcode
   command: '{{ in_chroot }} "emerge --quiet-build sys-firmware/intel-microcode"'
@@ -81,41 +88,16 @@
 # modules_install), so the tarball ships /usr/src/linux with a built bzImage and
 # /lib/modules. No compile at install; the UKI step below just assembles it.
 
-- name: write kernel-install / UKI config
+# install.conf, uki.conf, entry-token, the two install.d hook scripts
+# (95-efibootmgr-register, 96-prune-old-ukis), and the /dev/null masks for the
+# systemd-microcode plugins are all STATIC and now BAKED into the stage4 overlay
+# (etc/kernel/ + etc/kernel/install.d/). Only uki.env stays here — it carries the
+# host/user tunables (label prefix, retention, promote-to-default).
+- name: write kernel-install uki.env (host tunables; the rest is baked)
   copy:
-    dest: "{{ chroot_dir }}/etc/kernel/{{ item.f }}"
+    dest: "{{ chroot_dir }}/etc/kernel/uki.env"
     mode: "0644"
-    content: "{{ item.c }}"
-  loop:
-    - { f: install.conf, c: "layout=uki\ninitrd_generator=dracut\nuki_generator=ukify\n" }
-    - { f: uki.conf,     c: "[UKI]\nCmdline=@/etc/kernel/cmdline\nOSRelease=@/etc/os-release\n" }
-    - { f: entry-token,  c: "gentoo\n" }
-    - { f: uki.env,      c: "LABEL_PREFIX=\"{{ uki_label_prefix }}\"\nKEEP_N_KERNELS={{ keep_n_kernels }}\nPROMOTE_NEW_TO_DEFAULT={{ 'true' if promote_new_to_default else 'false' }}\n" }
-  loop_control:
-    label: "{{ item.f }}"
-
-- name: install kernel-install hook scripts
-  copy:
-    src: "hooks/{{ item }}"
-    dest: "{{ chroot_dir }}/etc/kernel/install.d/{{ item }}"
-    mode: "0755"
-  loop:
-    - 95-efibootmgr-register.install
-    - 96-prune-old-ukis.install
-
-# Mask the systemd microcode plugins (symlink->/dev/null is kernel-install's disable
-# convention). dracut early_microcode=yes already bundles the host microcode into the
-# UKI; left enabled these drop a redundant {amd,intel}-uc.img into /boot — harmless but
-# it breaks UKI-only /boot (hits AMD hosts, where the ucode legitimately exists).
-- name: disable redundant systemd microcode install.d plugins (keep /boot UKI-only)
-  file:
-    src: /dev/null
-    dest: "{{ chroot_dir }}/etc/kernel/install.d/{{ item }}"
-    state: link
-    force: true
-  loop:
-    - 35-amd-microcode-systemd.install
-    - 35-intel-microcode-systemd.install
+    content: "LABEL_PREFIX=\"{{ uki_label_prefix }}\"\nKEEP_N_KERNELS={{ keep_n_kernels }}\nPROMOTE_NEW_TO_DEFAULT={{ 'true' if promote_new_to_default else 'false' }}\n"
 
 # Feed the baked bzImage from the source tree (NOT /boot) so kernel-install
 # builds+registers the UKI without dropping a loose vmlinuz in /boot. dracut

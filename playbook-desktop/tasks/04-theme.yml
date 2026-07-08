@@ -1,112 +1,26 @@
 ---
 ###################################################
-# bootstrap fonts,themes,icons,cursors,wallpapers #
+# Fonts, themes, icons, and cursors are now VENDORED in the dotfiles (stowed by
+# 01-dotfiles into ~/.local/share/{fonts,themes,icons} and ~/.config/Kvantum),
+# so the old GitHub-download tasks are gone. This task only rebuilds the caches
+# those stowed assets need, then pulls wallpapers (the one asset NOT in dotfiles).
 ###################################################
-- name: create user asset directories
-  file:
-    path: "/home/{{ user_name }}/{{ item }}"
-    state: directory
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-    mode: "0755"
-  loop:
-    - .local/share/fonts/JetBrainsMono
-    - .local/share/fonts/JetBrainsMonoNerdFont
-    - .local/share/themes
-    - .local/share/icons
-    - .config/Kvantum
-    - .local/src
 
-# fonts 
-- name: fetch JetBrains Mono
-  unarchive:
-    src: "https://github.com/JetBrains/JetBrainsMono/releases/download/v{{ theme_assets.jetbrains_mono_version }}/JetBrainsMono-{{ theme_assets.jetbrains_mono_version }}.zip"
-    dest: "/home/{{ user_name }}/.local/share/fonts/JetBrainsMono"
-    remote_src: yes
-    creates: "/home/{{ user_name }}/.local/share/fonts/JetBrainsMono/fonts/ttf/JetBrainsMono-Regular.ttf"
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
-- name: fetch JetBrainsMono Nerd Font
-  unarchive:
-    src: "https://github.com/ryanoasis/nerd-fonts/releases/download/v{{ theme_assets.nerd_fonts_version }}/JetBrainsMono.tar.xz"
-    dest: "/home/{{ user_name }}/.local/share/fonts/JetBrainsMonoNerdFont"
-    remote_src: yes
-    creates: "/home/{{ user_name }}/.local/share/fonts/JetBrainsMonoNerdFont/JetBrainsMonoNerdFont-Regular.ttf"
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
+# Stowed fonts/icons ship without caches (icon-theme.cache is gitignored), so
+# rebuild them after 01-dotfiles has laid the assets down.
 - name: refresh font cache
   command: fc-cache -f
   become_user: "{{ user_name }}"
 
-# cursors
-- name: fetch Bibata cursor
-  unarchive:
-    src: "https://github.com/ful1e5/Bibata_Cursor/releases/download/v{{ theme_assets.bibata_version }}/{{ theme_assets.bibata_variant }}.tar.xz"
-    dest: "/home/{{ user_name }}/.local/share/icons"
-    remote_src: yes
-    creates: "/home/{{ user_name }}/.local/share/icons/{{ theme_assets.bibata_variant }}/index.theme"
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
-# GTK theme
-- name: fetch catppuccin-gtk
-  unarchive:
-    src: "https://github.com/catppuccin/gtk/releases/download/v{{ theme_assets.catppuccin_gtk_version }}/catppuccin-{{ theme_assets.catppuccin_flavor }}-{{ theme_assets.catppuccin_accent }}-standard+default.zip"
-    dest: "/home/{{ user_name }}/.local/share/themes"
-    remote_src: yes
-    creates: "/home/{{ user_name }}/.local/share/themes/catppuccin-{{ theme_assets.catppuccin_flavor }}-{{ theme_assets.catppuccin_accent }}-standard+default/index.theme"
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
-# kvantum theme
-- name: clone catppuccin-kvantum repo
-  git:
-    repo: https://github.com/catppuccin/kvantum.git
-    dest: "/home/{{ user_name }}/.local/src/catppuccin-kvantum"
-    version: main
-    depth: 1
-    update: yes
-  become_user: "{{ user_name }}"
-
-- name: install Kvantum theme
-  copy:
-    src: "/home/{{ user_name }}/.local/src/catppuccin-kvantum/themes/catppuccin-{{ theme_assets.catppuccin_flavor }}-{{ theme_assets.catppuccin_accent }}/"
-    dest: "/home/{{ user_name }}/.config/Kvantum/catppuccin-{{ theme_assets.catppuccin_flavor }}-{{ theme_assets.catppuccin_accent }}/"
-    remote_src: yes
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
-# papirus icons
-- name: fetch Papirus icon theme
-  unarchive:
-    src: "https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/archive/refs/tags/{{ theme_assets.papirus_version }}.tar.gz"
-    dest: "/home/{{ user_name }}/.local/src"
-    remote_src: yes
-    creates: "/home/{{ user_name }}/.local/src/papirus-icon-theme-{{ theme_assets.papirus_version }}/Papirus/index.theme"
-    owner: "{{ user_name }}"
-    group: "{{ user_name }}"
-  become_user: "{{ user_name }}"
-
-- name: install Papirus
-  command: >
-    cp -r
-    /home/{{ user_name }}/.local/src/papirus-icon-theme-{{ theme_assets.papirus_version }}/{{ item }}
-    /home/{{ user_name }}/.local/share/icons/{{ item }}
-  args:
-    creates: "/home/{{ user_name }}/.local/share/icons/{{ item }}/index.theme"
+- name: rebuild icon-theme caches for stowed icon themes
+  command: "gtk-update-icon-cache -f -t /home/{{ user_name }}/.local/share/icons/{{ item }}"
   loop:
     - Papirus
     - Papirus-Dark
   become_user: "{{ user_name }}"
+  failed_when: false   # skip cleanly if a theme dir isn't present
 
-# wallpapers
+# Wallpapers are the only theming asset NOT vendored in dotfiles.
 - name: clone wallpapers repo to ~/Pictures/bgs
   git:
     repo: "{{ wallpapers_repo }}"

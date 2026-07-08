@@ -10,19 +10,9 @@
     follow: false
     force: yes
 
-- name: write /etc/locale.gen
-  copy:
-    dest: "{{ chroot_dir }}/etc/locale.gen"
-    mode: "0644"
-    content: |
-      {% for l in locales %}
-      {{ l }}
-      {% endfor %}
-
-- name: generate locales
-  command: '{{ in_chroot }} "locale-gen"'
-- name: set locale
-  command: '{{ in_chroot }} "eselect locale set {{ default_locale }}"'
+# NOTE: /etc/locale.gen (en_US.UTF-8) is BAKED into the stage4 overlay, and the
+# locales are generated + `eselect locale set` is run in the stage4 fsscript —
+# both host-agnostic. Only the keymap/hostname/hosts identity stays per-host.
 - name: set keymap
   lineinfile:
     path: "{{ chroot_dir }}/etc/conf.d/keymaps"

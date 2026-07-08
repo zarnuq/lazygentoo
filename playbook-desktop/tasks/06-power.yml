@@ -25,10 +25,13 @@
       set_fact:
         cpu_is_intel: "{{ cpu_vendor.stdout | trim == 'GenuineIntel' }}"
 
-    - name: compute effective power package + service lists
+    # Hardcoded, NOT user-configurable: a laptop always gets acpid + tlp; an Intel
+    # laptop additionally gets thermald. Desktops never enter this block, so they
+    # never install or enable any of it.
+    - name: compute effective power package + service lists (Intel adds thermald)
       set_fact:
-        power_packages_eff: "{{ power_packages + (power_packages_intel if cpu_is_intel else []) }}"
-        power_services_eff: "{{ power_services + (power_services_intel if cpu_is_intel else []) }}"
+        power_packages_eff: "{{ ['sys-power/acpid', 'sys-power/tlp'] + (['sys-power/thermald'] if cpu_is_intel else []) }}"
+        power_services_eff: "{{ ['acpid', 'tlp'] + (['thermald'] if cpu_is_intel else []) }}"
 
     - name: install power packages (+ Intel-only on Intel)
       command: >
@@ -38,26 +41,10 @@
       async: 3600
       poll: 30
 
-    #########################################
-    # acpid config: suspend on lid close (runit+seatd has no logind to do it).
-    #########################################
-    - name: acpid lid event
-      copy:
-        dest: /etc/acpi/events/lid
-        mode: "0644"
-        content: |
-          event=button/lid.*
-          action=/etc/acpi/lid.sh
-
-    - name: acpid lid action -- suspend to RAM when lid reads closed
-      copy:
-        dest: /etc/acpi/lid.sh
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          # bare kernel suspend, no screen lock; add a locker above this line if wanted.
-          # lid node name (e.g. LID0) varies by hardware -- glob covers it.
-          grep -q closed /proc/acpi/button/lid/*/state && echo mem > /sys/power/state
+    # NOTE: acpid lid config (/etc/acpi/events/lid + /etc/acpi/lid.sh, suspend on
+    # lid close since runit+seatd has no logind) is now BAKED into the stage4
+    # overlay (etc/acpi/) — static, and harmless on desktops (acpid isn't enabled
+    # there). Only the laptop-conditional package install + service enable remain.
 
     #########################################
     # enable services (live runsvdir picks these up immediately)

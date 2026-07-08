@@ -7,8 +7,8 @@
 #   - XDG_RUNTIME_DIR shell snippet
 #####################################################
 
-# dhcpcd is baked (no-op --noreplace); NetworkManager is installed here if the
-# host selected it, since NM is not in the baked package set.
+# Neither network daemon is baked, so the chosen one (dhcpcd OR NetworkManager)
+# is installed here based on network_stack — no leftover of the unchosen daemon.
 - name: install network daemon ({{ network_stack }})
   command: >
     {{ in_chroot }}
@@ -22,6 +22,17 @@
       [main]
       auth-polkit=false
   when: network_stack == "networkmanager"
+
+# mesa is baked with NO VIDEO_CARDS (make.conf is kept hardware-agnostic), so the
+# tarball ships only the llvmpipe software rasterizer. Rebuild it against THIS
+# host's VIDEO_CARDS (detected in 00-preflight, written to make.conf by
+# make.conf.host.j2) so the correct hardware gallium driver (radeonsi/iris/
+# nouveau) is built. The baked LLVM carries the AMDGPU backend, so a radeonsi
+# build here does NOT drag a full LLVM rebuild.
+- name: rebuild mesa for this host's GPU
+  command: '{{ in_chroot }} "emerge --quiet-build --newuse --oneshot media-libs/mesa"'
+  async: 3600
+  poll: 30
 
 # nvidia-drivers builds its kernel module against /usr/src/linux (compiled in
 # 06-kernel.yml). GPU is per-host, so it can't be baked — emerge before first
