@@ -16,8 +16,3 @@
     {{ apps_packages | join(' ') }}
   async: 14400
   poll: 30
-
-- name: restart greetd
-  shell: |
-    [ "$(cat /proc/1/comm)" = "runit" ] && sv restart greetd || \
-    echo "not running runit as PID 1; greetd will start on next runit boot"

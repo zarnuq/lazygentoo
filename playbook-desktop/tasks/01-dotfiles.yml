@@ -2,9 +2,7 @@
 ###########################
 # clone and stow dotfiles #
 ###########################
-- name: install git, stow
-  command: emerge --quiet-build --noreplace dev-vcs/git app-admin/stow
-
+# git + stow are BAKED into the stage4, so no install step here.
 - name: pre-create $HOME directories so stow works properly
   file:
     path: "/home/{{ user_name }}/{{ item }}"
