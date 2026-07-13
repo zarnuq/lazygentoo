@@ -1,65 +1,77 @@
 ---
 ###############################################################
-# nix is installed via sys-apps/nix (BAKED, from nix-guix-gentoo)
-# — no upstream curl|sh installer. This task only layers on the
-# nix.conf tweaks, the runit daemon, and the per-user
-# home-manager setup (channels + install + switch).
+# nix is installed the upstream way: the official single-user
+# installer (`--no-daemon`). No overlay ebuild, no nix-daemon,
+# no runit service, no nixbld build users. The store lives at
+# /nix owned by {{ user_name }}, and everything (channels,
+# home-manager) runs as that user with no NIX_REMOTE=daemon.
 #
-# Paths verified against sys-apps/nix: daemon at
-# /nix/var/nix/profiles/default/bin/nix-daemon (the baked runit sv
-# already targets it), profile script at
-# /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh. The
-# ebuild also ships /etc/profile.d/nix.sh (USE=etc-profile) that
-# auto-sources for login shells, so the zshenv line below is a
-# fallback for the USE=-etc-profile case.
+# Why single-user and not multi-user: the official installer's
+# multi-user (`--daemon`) mode hard-requires systemd and aborts
+# on a runit box. Multi-user was the whole reason the old
+# nix-guix-gentoo ebuild + baked runit sv existed. On a
+# single-person machine single-user is the standard, simpler
+# path and drops all of that machinery.
+#
+# The store dir is pre-created and chown'd to the user first so
+# the installer doesn't try to `sudo mkdir /nix` (this box has
+# doas, not sudo).
 ###############################################################
+- name: pre-create /nix owned by the user (single-user store)
+  become: true
+  file:
+    path: /nix
+    state: directory
+    owner: "{{ user_name }}"
+    group: "{{ user_name }}"
+    mode: "0755"
+
+- name: fetch the official nix installer
+  become_user: "{{ user_name }}"
+  get_url:
+    url: https://nixos.org/nix/install
+    dest: /tmp/nix-install.sh
+    mode: "0755"
+  args:
+    creates: "/home/{{ user_name }}/.nix-profile/bin/nix"
+
+- name: install nix (single-user)
+  become_user: "{{ user_name }}"
+  shell: |
+    set -eu
+    # --no-daemon: single-user; --no-channel-add: we add our own channels
+    # below; --yes: non-interactive. /nix already exists + is writable, so
+    # the installer proceeds without escalating.
+    sh /tmp/nix-install.sh --no-daemon --no-channel-add --yes
+  args:
+    creates: "/home/{{ user_name }}/.nix-profile/bin/nix"
+
 - name: configure /etc/nix/nix.conf
+  become: true
   blockinfile:
     path: /etc/nix/nix.conf
     create: yes
     mode: "0644"
     marker: "# {mark} ANSIBLE-MANAGED nix settings"
+    # No trusted-users: that's a daemon concept, meaningless single-user
+    # (the store owner is implicitly trusted). sandbox stays on but needs
+    # unprivileged user namespaces in the kernel; if those are off nix
+    # falls back with a warning rather than failing.
     block: |
       experimental-features = nix-command flakes
-      trusted-users = root {{ user_name }}
       sandbox = true
       auto-optimise-store = true
 
-#####################
-# nix runit service #
-#####################
-- name: enable nix-daemon
-  file:
-    src: /etc/sv/nix-daemon
-    dest: /service/nix-daemon
-    state: link
-    follow: false
-    force: yes
-
-- name: start nix-daemon
-  shell: |
-    if [ "$(cat /proc/1/comm)" = "runit" ]; then
-      # runsvdir rescans /service every ~5s; wait for runsv before sv up
-      for _ in $(seq 1 15); do
-        [ -e /service/nix-daemon/supervise/ok ] && break; sleep 1
-      done
-      sv -w 30 up nix-daemon
-    else
-      echo "not running runit as PID 1; nix-daemon will start on next runit boot"
-    fi
-  register: nix_daemon_start
-
-- name: wait for nix-daemon socket
-  wait_for:
-    path: /nix/var/nix/daemon-socket/socket
-    timeout: 30
-  when: "'not running runit' not in (nix_daemon_start.stdout | default(''))"
-
-- name: source nix profile
+# Single-user profile script lives under the user's own profile, not the
+# system /nix/var/nix/profiles/default tree. The installer already adds a
+# sourcing line to the user's shell rc; this global fallback covers login
+# shells regardless (USE=-etc-profile equivalent for the manual install).
+- name: source nix profile for login shells
+  become: true
   lineinfile:
     path: /etc/zsh/zshenv
-    regexp: '\. .*/nix-daemon\.sh$'
-    line: '[ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+    regexp: '\. .*/nix\.sh$'
+    line: '[ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ] && . "$HOME/.nix-profile/etc/profile.d/nix.sh"'
     create: yes
     mode: "0644"
 
@@ -68,8 +80,7 @@
 #######################
 - name: add nixpkgs channel
   shell: |
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    export NIX_REMOTE=daemon
+    . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     nix-channel --add https://nixos.org/channels/{{ nix_channel }} nixpkgs
   args:
     creates: "/home/{{ user_name }}/.nix-defexpr/channels/nixpkgs"
@@ -77,8 +88,7 @@
 
 - name: add home-manager channel
   shell: |
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    export NIX_REMOTE=daemon
+    . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     nix-channel --add https://github.com/nix-community/home-manager/archive/{{ home_manager_branch }}.tar.gz home-manager
   args:
     creates: "/home/{{ user_name }}/.nix-defexpr/channels/home-manager"
@@ -86,15 +96,13 @@
 
 - name: update nix channels
   shell: |
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    export NIX_REMOTE=daemon
+    . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     nix-channel --update
   become_user: "{{ user_name }}"
 
 - name: install home-manager
   shell: |
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    export NIX_REMOTE=daemon
+    . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     nix-shell '<home-manager>' -A install
   args:
     creates: "/home/{{ user_name }}/.nix-profile/bin/home-manager"
@@ -105,7 +113,6 @@
 ######################
 - name: home-manager switch
   shell: |
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-    export NIX_REMOTE=daemon
+    . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     home-manager switch
   become_user: "{{ user_name }}"

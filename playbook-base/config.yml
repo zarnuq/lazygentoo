@@ -6,7 +6,7 @@
 ###############
 
 # Target disk
-target_disk: "/dev/nvme0n1"
+target_disk: "/dev/sda"
 
 # Partition sizes in MB (for single boot)
 efi_size_mib: 1028   # EFI System Partition /boot
@@ -83,7 +83,8 @@ user_shell: "/bin/zsh"     # zsh is baked into the stage4; /etc/zsh/zshenv baked
 # Personalized catalyst stage4 tarball (bakes portage config, @world/base+desktop,
 # runit, overlays). Local path on the controller (relative to playbook-base/) OR an
 # https:// URL. This is what tasks/02-stage3.yml extracts.
-stage4_tarball: "files/stage4-amd64-v3-runit.tar.xz"
+stage4_tarball: "files/stage4-amd64-v3-runit-20260706.tar.bz2"
+
 
 # Mirror for GENTOO_MIRRORS (consumed by templates/make.conf.host.j2).
 gentoo_mirror: "https://distfiles.gentoo.org/releases/amd64/autobuilds"

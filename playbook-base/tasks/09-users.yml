@@ -5,6 +5,17 @@
 - name: create and configure user (create_user=true)
   when: create_user
   block:
+    # useradd -G aborts if ANY supplemental group is missing (e.g. plugdev is
+    # not created in the stage4). Pre-create each with `groupadd -f` (idempotent:
+    # no-op if it already exists, exit 0 either way) so user creation can't fail
+    # on a group the base image happens not to ship.
+    - name: ensure supplemental groups exist
+      command: >
+        {{ in_chroot }}
+        "groupadd -f {{ item }}"
+      loop: "{{ user_groups }}"
+      changed_when: false
+
     - name: create user
       command: >
         {{ in_chroot }}

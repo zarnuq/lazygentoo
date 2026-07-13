@@ -48,10 +48,19 @@
       {%- if 'AMD' in out or 'ATI' in out or 'Advanced Micro Devices' in out -%}{%- set _ = parts.extend(['amdgpu', 'radeonsi']) -%}{%- endif -%}
       {%- if 'Intel' in out -%}{%- set _ = parts.append('intel') -%}{%- endif -%}
       {%- if 'NVIDIA' in out -%}{%- set _ = parts.append('nvidia') -%}{%- endif -%}
+      {%- if 'Red Hat' in out or 'Virtio' in out or 'virtio' in out -%}{%- set _ = parts.append('virgl') -%}{%- endif -%}
+      {%- if 'VMware' in out -%}{%- set _ = parts.append('vmware') -%}{%- endif -%}
       {{ parts | join(' ') }}
 
-- name: stop if GPU not found
-  fail:
+# A VM with a Bochs/cirrus/QXL emulated GPU (or headless) matches none of the
+# above, leaving VIDEO_CARDS="". That is VALID — mesa still builds its generic
+# software/swrast path, so don't hard-fail: warn and continue. On real hardware
+# an empty result means detection genuinely broke, which the warning surfaces.
+- name: warn if no known GPU detected (empty VIDEO_CARDS is fine on a VM)
+  debug:
+    msg: >-
+      No AMD/Intel/NVIDIA/virtio/VMware GPU matched in lspci output; leaving
+      VIDEO_CARDS empty (generic/software rendering). Expected on a VM.
   when: video_cards | trim == ""
 
 #################################
