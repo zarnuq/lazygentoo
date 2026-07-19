@@ -26,14 +26,20 @@
     group: "{{ user_name }}"
     mode: "0755"
 
+# get_url has no `creates` (that's a command/shell arg), so guard the download
+# with an explicit stat instead — skips the fetch when nix is already installed.
+- name: check whether nix is already installed
+  stat:
+    path: "/home/{{ user_name }}/.nix-profile/bin/nix"
+  register: nix_bin
+
 - name: fetch the official nix installer
   become_user: "{{ user_name }}"
   get_url:
     url: https://nixos.org/nix/install
     dest: /tmp/nix-install.sh
     mode: "0755"
-  args:
-    creates: "/home/{{ user_name }}/.nix-profile/bin/nix"
+  when: not nix_bin.stat.exists
 
 - name: install nix (single-user)
   become_user: "{{ user_name }}"
