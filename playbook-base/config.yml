@@ -17,7 +17,7 @@ swap_size_mib: 16000 # set to 0 to skip swap
 #############
 
 # Option for dual boot (must have partitions made already!)
-dual_boot: false 
+dual_boot: true 
 
 # Partitions that will be written to (for dual boot only)
 efi_part_override:  "/dev/nvme0n1p4"    # Linux's ESP (FAT32, mounted at /boot)
@@ -28,7 +28,7 @@ root_part_override: "/dev/nvme0n1p6"    # Linux root (ext4)
 # ENCRYPTION OPTIONS #
 ######################
 
-fde_enable: false 
+fde_enable: true 
 luks_name: "cryptroot"
 luks_cipher: "aes-xts-plain64"
 luks_key_size: 512
@@ -105,7 +105,7 @@ emerge_jobs: 0            # 0 = ceil(vCPUs/2)
 ###################
 
 # networking options
-network_stack: "dhcpcd"   # networkmanager | dhcpcd
+network_stack: "networkmanager"   # networkmanager | dhcpcd
 
 # NOTE: runit_services, binhost_packages, kernel_build_deps, and base_packages are
 # all BAKED into the stage4 (their canonical lists live in the catalyst spec's
