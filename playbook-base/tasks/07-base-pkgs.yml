@@ -29,8 +29,23 @@
 # make.conf.host.j2) so the correct hardware gallium driver (radeonsi/iris/
 # nouveau) is built. The baked LLVM carries the AMDGPU backend, so a radeonsi
 # build here does NOT drag a full LLVM rebuild.
-- name: rebuild mesa for this host's GPU
-  command: '{{ in_chroot }} "emerge --quiet-build --newuse --oneshot media-libs/mesa"'
+#
+# wayland-scanner is pinned to the INSTALLED dev-libs/wayland version. It was
+# split out of dev-libs/wayland after the bake, so mesa now build-depends on the
+# separate dev-util/wayland-scanner. 04-portage's emerge-webrsync can land a
+# snapshot taken mid-bump, where wayland-scanner has advanced past dev-libs/
+# wayland; that newer scanner carries a "<dev-libs/wayland-<next>" soft-block the
+# installed (older) wayland can't satisfy when that wayland version isn't in the
+# snapshot -> emerge aborts ("packages which cannot be installed at the same
+# time"). scanner and wayland are released in tandem, so a scanner matching the
+# installed wayland always exists and satisfies every reverse-dep's >= floor;
+# pinning to it builds mesa regardless of drift and without upgrading wayland at
+# install time (matches the no-@world-updates-at-install policy).
+- name: rebuild mesa for this host's GPU (scanner pinned to installed wayland)
+  command: >
+    {{ in_chroot }}
+    "wlpv=$(portageq match / dev-libs/wayland); wlpv=${wlpv#dev-libs/wayland-}; wlpv=${wlpv%-r*};
+     emerge --quiet-build --newuse --oneshot =dev-util/wayland-scanner-${wlpv} media-libs/mesa"
   async: 3600
   poll: 30
 
